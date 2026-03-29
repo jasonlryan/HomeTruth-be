@@ -6,6 +6,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js",
     "dev": "nodemon server.js",
+    "dev:all": "bash ../start-local.sh",
+    "sync:tickets": "bash ../sync-tickets.sh",
     "start:staging": "APP_ENV=staging node server.js",
     "dev:staging": "APP_ENV=staging nodemon server.js"
   },
