@@ -1,0 +1,3129 @@
+{
+  "info": {
+    "name": "Home Truth RAG API",
+    "description": "Complete API collection for Home Truth backend with RAG system integration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8005",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "conversationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "budgetCalculationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "chatHistoryId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"home_address\": \"123 Main Street, London, UK\",\n  \"confirmPassword\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"remember_me\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"adminpassword123\",\n  \"remember_me\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/admin/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "admin", "login"]
+            },
+            "description": "Login endpoint for admin users only. Requires admin role."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"John Updated\",\n  \"last_name\": \"Doe Updated\",\n  \"home_address\": \"456 New Street, Manchester, UK\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/update-profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "update-profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"password123\",\n  \"newPassword\": \"newpassword123\",\n  \"confirmNewPassword\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "change-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "forgot-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"your_reset_token_here\",\n  \"newPassword\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "reset-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Join Waitlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "waitlist", "join"]
+            },
+            "description": "Join the HomeTruth waitlist. Users will receive a confirmation email after joining."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Document Management (RAG System)",
+      "item": [
+        {
+          "name": "Upload Documents",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "upload"]
+            },
+            "description": "Upload up to 20 documents (PDF, DOCX, TXT). Documents will be processed and stored in vector database for RAG."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Documents (Document Library)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/documents?page=1&limit=10&search=&category=&entryMethod=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "documents"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search in title/filename",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": "Filter by category",
+                  "disabled": true
+                },
+                {
+                  "key": "entryMethod",
+                  "value": "",
+                  "description": "Filter by entry method (file_upload, url_scrape, manual_entry)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get formatted document list for Document Library UI. Returns documents with document_hash, formatted dates, source URLs, file types, chunk counts, and all metadata needed for display."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/documents/:documentId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "documents", ":documentId"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get detailed information about a specific document with formatted metadata for Document Library display."
+          },
+          "response": []
+        },
+        {
+          "name": "Preview Document",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/documents/:documentId/preview?preview_length=500",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "documents", ":documentId", "preview"],
+              "query": [
+                {
+                  "key": "preview_length",
+                  "value": "500",
+                  "description": "Length of preview text (default: 500 characters)"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get a preview of document content. Returns formatted preview with document hash, source URL, and metadata. Used for Document Library preview feature."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/documents/:documentId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "documents", ":documentId"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Knowledge (URL Scrape)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com/article\",\n  \"title\": \"First-time Buyer Checklist\",\n  \"category\": \"Buying Process\",\n  \"documentId\": \"checklist_001\",\n  \"priority\": \"Normal\",\n  \"source\": \"Government Website\",\n  \"tags\": [\"homebuying\", \"first-time-buyer\", \"uk\", \"property\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge"]
+            },
+            "description": "Add knowledge to knowledge base by scraping a URL. Admin only. The URL will be scraped and content extracted automatically."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Knowledge (Manual Entry)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"First-time Buyer Checklist\",\n  \"content\": \"This is the knowledge content that will be added to the knowledge base. It can contain detailed information about first-time homebuying, checklists, important considerations, and more.\",\n  \"category\": \"Buying Process\",\n  \"documentId\": \"checklist_001\",\n  \"priority\": \"Normal\",\n  \"source\": \"Internal\",\n  \"tags\": [\"homebuying\", \"first-time-buyer\", \"uk\", \"property\", \"process\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge"]
+            },
+            "description": "Add knowledge to knowledge base by manually entering title and content. Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Knowledge (File Upload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "document",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "title",
+                  "value": "Document Title",
+                  "type": "text"
+                },
+                {
+                  "key": "category",
+                  "value": "Legal",
+                  "type": "text"
+                },
+                {
+                  "key": "documentId",
+                  "value": "doc_001",
+                  "type": "text"
+                },
+                {
+                  "key": "priority",
+                  "value": "Normal",
+                  "type": "text"
+                },
+                {
+                  "key": "source",
+                  "value": "Internal",
+                  "type": "text"
+                },
+                {
+                  "key": "tags",
+                  "value": "[\"legal\", \"contract\", \"property\"]",
+                  "type": "text",
+                  "description": "JSON array of tags as string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge"]
+            },
+            "description": "Add knowledge to knowledge base by uploading a file (PDF, DOCX, TXT). Admin only. Supports additional metadata fields."
+          },
+          "response": []
+        },
+        {
+          "name": "Suggest Metadata (AI)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"First-time Buyer Checklist\",\n  \"content\": \"This document covers important considerations for first-time homebuyers in the UK, including mortgage options, legal requirements, survey processes, and cost considerations.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge/suggest-metadata",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge", "suggest-metadata"]
+            },
+            "description": "Get AI-suggested metadata (category, tags, priority, source) based on document title and content. Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Knowledge Base",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"first-time buyer mortgage requirements\",\n  \"limit\": 20,\n  \"category\": \"Buying Process\",\n  \"tags\": [\"mortgage\", \"first-time-buyer\"],\n  \"source\": \"Government Website\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge/search",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge", "search"]
+            },
+            "description": "Search across the knowledge base using semantic search. Supports filtering by category, tags, and source. Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Documents",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select multiple files (up to 50)"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": [],
+                  "description": "Additional file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge/bulk-upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge", "bulk-upload"]
+            },
+            "description": "Upload multiple documents (up to 50 files) to the knowledge base in batch. Files will be processed concurrently. Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Knowledge Base Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge", "stats"]
+            },
+            "description": "Get Knowledge Base Stats formatted for dashboard UI. Returns: Total Records (combined across all namespaces), General Namespace count, Embedding Dimension, and Namespace Breakdown table with vector counts. Matches the dashboard stats view. Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Knowledge Base (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge/export?format=json&limit=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge", "export"],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json",
+                  "description": "Export format: json or csv"
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": "Optional: Filter by category",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Optional: Limit number of records"
+                }
+              ]
+            },
+            "description": "Export knowledge base data in JSON format. Can filter by category and limit results. Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Knowledge Base (CSV)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/knowledge/export?format=csv",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "knowledge", "export"],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv"
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": "Optional: Filter by category",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Export knowledge base data as CSV file download. Can filter by category. Admin only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "AI Chat with RAG",
+      "item": [
+        {
+          "name": "Start New Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userMessage\": \"Hello, can you help me with UK property information?\",\n  \"is_saved\": false,\n  \"search_web\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "chat"]
+            },
+            "description": "Start a new chat. The AI will use your uploaded documents as context for responses."
+          },
+          "response": []
+        },
+        {
+          "name": "Continue Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userMessage\": \"What are the current property prices in London?\",\n  \"conversation_id\": \"{{conversationId}}\",\n  \"is_saved\": false,\n  \"search_web\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "chat"]
+            },
+            "description": "Continue an existing conversation using conversation_id from previous response."
+          },
+          "response": []
+        },
+        {
+          "name": "Save Conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversationId}}\",\n  \"is_saved\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/toggle-saved",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "toggle-saved"]
+            },
+            "description": "Save or unsave a conversation. Users can save up to 3 conversations."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Chat History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/history?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "history"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "saved_only",
+                  "value": "false",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Conversation List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/conversations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "conversations"],
+              "query": [
+                {
+                  "key": "saved_only",
+                  "value": "false",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Conversation Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/conversation/:conversationId/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "conversation", ":conversationId", "status"],
+              "variable": [
+                {
+                  "key": "conversationId",
+                  "value": "{{conversationId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/conversation/:conversationId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "conversation", ":conversationId"],
+              "variable": [
+                {
+                  "key": "conversationId",
+                  "value": "{{conversationId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Chat with Web Search (Stamp Duty)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userMessage\": \"How much stamp duty will I pay on a £650k house in Manchester?\",\n  \"conversation_id\": \"{{conversationId}}\",\n  \"is_saved\": false,\n  \"search_web\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "chat"]
+            },
+            "description": "Chat with web search enabled for current stamp duty rates and calculations."
+          },
+          "response": []
+        },
+        {
+          "name": "Chat with Web Search (Mortgage Rates)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userMessage\": \"What are the current mortgage rates for first-time buyers in the UK?\",\n  \"conversation_id\": \"{{conversationId}}\",\n  \"is_saved\": false,\n  \"search_web\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "chat"]
+            },
+            "description": "Chat with web search enabled for current mortgage rates and market conditions."
+          },
+          "response": []
+        },
+        {
+          "name": "Chat with Web Search (Property Valuation)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userMessage\": \"What's my property worth in NW1 postcode today?\",\n  \"conversation_id\": \"{{conversationId}}\",\n  \"is_saved\": false,\n  \"search_web\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "chat"]
+            },
+            "description": "Chat with web search enabled for current property valuations and market data."
+          },
+          "response": []
+        },
+        {
+          "name": "Anonymous Chat (No Auth)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userMessage\": \"What are the benefits of buying vs renting in the UK?\",\n  \"sessionId\": \"anon_session_123\",\n  \"messageCount\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai_chat/anonymous",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai_chat", "anonymous"]
+            },
+            "description": "Chat without authentication. Limited to 6 messages per session."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Budget Calculation (AI-Powered)",
+      "item": [
+        {
+          "name": "Start AI Budget Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userMessage\": \"I want to buy a house for £500,000. I have £50,000 deposit and earn £80,000 per year. Help me calculate my budget.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/start-ai-chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "start-ai-chat"]
+            },
+            "description": "Start a new AI-powered budget calculation chat session"
+          },
+          "response": []
+        },
+        {
+          "name": "Continue AI Budget Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userMessage\": \"What about my monthly expenses of £2000?\",\n  \"budgetCalculationId\": \"{{budgetCalculationId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/continue-ai-chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "continue-ai-chat"]
+            },
+            "description": "Continue the AI budget calculation conversation"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Budget Field",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"field\": \"property_price\",\n  \"value\": 550000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/update-field/{{budgetCalculationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "update-field", "{{budgetCalculationId}}"]
+            },
+            "description": "Manually update a specific budget calculation field"
+          },
+          "response": []
+        },
+        {
+          "name": "Update All Budget Fields",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_price\": 550000,\n  \"deposit_amount\": 55000,\n  \"annual_income\": 85000,\n  \"monthly_expenses\": 2500,\n  \"interest_rate\": 5.2,\n  \"mortgage_term_years\": 30\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/update-all/{{budgetCalculationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "update-all", "{{budgetCalculationId}}"]
+            },
+            "description": "Update all budget calculation fields at once"
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Estimate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/generate-estimate/{{budgetCalculationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "generate-estimate", "{{budgetCalculationId}}"]
+            },
+            "description": "Generate budget estimate from chat data"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Budget Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/status/{{budgetCalculationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "status", "{{budgetCalculationId}}"]
+            },
+            "description": "Get current budget calculation status and progress"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Budget Calculations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "all"]
+            },
+            "description": "Get all budget calculations for the user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Saved Budget Calculations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/allSaved",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "allSaved"]
+            },
+            "description": "Get only saved budget calculations"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark as Saved",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/{{budgetCalculationId}}/save/My Budget Calculation",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "{{budgetCalculationId}}", "save", "My Budget Calculation"]
+            },
+            "description": "Mark a budget calculation as saved with a custom name"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Budget Name",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Budget Name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/budget-calculation/{{budgetCalculationId}}/name",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "budget-calculation", "{{budgetCalculationId}}", "name"]
+            },
+            "description": "Update the name of a budget calculation"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Quiz System",
+      "item": [
+        {
+          "name": "Quiz Questions",
+          "item": [
+            {
+              "name": "Create Quiz Question",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question_text\": \"What is your preferred property type?\",\n  \"question_type\": \"multiple_choice\",\n  \"is_required\": true,\n  \"order\": 1\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", ""]
+                },
+                "description": "Create a new quiz question"
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Quiz Questions",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "{{authToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", ""]
+                },
+                "description": "Get all quiz questions (requires authentication)"
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Questions with Answers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "{{authToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/withAnswer",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", "withAnswer"]
+                },
+                "description": "Get all quiz questions with their correct answers (requires authentication)"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Question by ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/:questionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", ":questionId"],
+                  "variable": [
+                    {
+                      "key": "questionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Get a specific quiz question by ID"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Question with Options",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/withOption/:questionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", "withOption", ":questionId"],
+                  "variable": [
+                    {
+                      "key": "questionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Get a specific question with all its options"
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Questions with Options",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/allWithOption",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", "allWithOption"]
+                },
+                "description": "Get all questions with their options"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Questions by Type",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/type/:type",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", "type", ":type"],
+                  "variable": [
+                    {
+                      "key": "type",
+                      "value": "multiple_choice",
+                      "description": "Question type: multiple_choice, single_choice, text, rating"
+                    }
+                  ]
+                },
+                "description": "Get questions filtered by type (multiple_choice, single_choice, text, rating)"
+              },
+              "response": []
+            },
+            {
+              "name": "Update Quiz Question",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question_text\": \"Updated question text\",\n  \"question_type\": \"single_choice\",\n  \"is_required\": false,\n  \"order\": 2\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/:questionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", ":questionId"],
+                  "variable": [
+                    {
+                      "key": "questionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Update a quiz question by ID"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Quiz Question",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz/:questionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz", ":questionId"],
+                  "variable": [
+                    {
+                      "key": "questionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Delete a quiz question by ID"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Quiz Options",
+          "item": [
+            {
+              "name": "Create Quiz Option",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question_id\": 1,\n  \"option_text\": \"House\",\n  \"is_correct\": true,\n  \"order\": 1\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-options/",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-options", ""]
+                },
+                "description": "Create a new quiz option for a question"
+              },
+              "response": []
+            },
+            {
+              "name": "Bulk Create Quiz Options",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question_id\": 1,\n  \"options\": [\n    {\n      \"option_text\": \"House\",\n      \"is_correct\": true,\n      \"order\": 1\n    },\n    {\n      \"option_text\": \"Apartment\",\n      \"is_correct\": false,\n      \"order\": 2\n    },\n    {\n      \"option_text\": \"Condo\",\n      \"is_correct\": false,\n      \"order\": 3\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-options/bulk",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-options", "bulk"]
+                },
+                "description": "Create multiple quiz options for a question at once"
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Quiz Options",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-options/",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-options", ""]
+                },
+                "description": "Get all quiz options"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Option by ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-options/:optionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-options", ":optionId"],
+                  "variable": [
+                    {
+                      "key": "optionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Get a specific quiz option by ID"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Options by Question ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-options/question/:questionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-options", "question", ":questionId"],
+                  "variable": [
+                    {
+                      "key": "questionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Get all options for a specific question"
+              },
+              "response": []
+            },
+            {
+              "name": "Update Quiz Option",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"option_text\": \"Updated option text\",\n  \"is_correct\": false,\n  \"order\": 2\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-options/:optionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-options", ":optionId"],
+                  "variable": [
+                    {
+                      "key": "optionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Update a quiz option by ID"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Quiz Option",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-options/:optionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-options", ":optionId"],
+                  "variable": [
+                    {
+                      "key": "optionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Delete a quiz option by ID"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Options by Question ID",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-options/question/:questionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-options", "question", ":questionId"],
+                  "variable": [
+                    {
+                      "key": "questionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Delete all options for a specific question"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Quiz Answers",
+          "item": [
+            {
+              "name": "Create Quiz Answer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "{{authToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question_id\": 1,\n  \"option_id\": 2,\n  \"user_id\": {{userId}},\n  \"answer_text\": \"Custom answer text\",\n  \"is_correct\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", ""]
+                },
+                "description": "Create or update a quiz answer (requires authentication)"
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Quiz Answers",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", ""]
+                },
+                "description": "Get all quiz answers"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Answer by ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/:answerId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", ":answerId"],
+                  "variable": [
+                    {
+                      "key": "answerId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Get a specific quiz answer by ID"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Answers by User ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/user/:userId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", "user", ":userId"],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": "Get all answers for a specific user"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Answers by Question ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/question/:questionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", "question", ":questionId"],
+                  "variable": [
+                    {
+                      "key": "questionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Get all answers for a specific question"
+              },
+              "response": []
+            },
+            {
+              "name": "Get User Question Answer",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/user/:userId/question/:questionId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", "user", ":userId", "question", ":questionId"],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    },
+                    {
+                      "key": "questionId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Get a specific user's answer for a specific question"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Quiz Completion Status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/user/:userId/completion",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", "user", ":userId", "completion"],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": "Get quiz completion status for a user"
+              },
+              "response": []
+            },
+            {
+              "name": "Update Quiz Answer",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "{{authToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"answer_id\": 1,\n  \"option_id\": 3,\n  \"answer_text\": \"Updated answer text\",\n  \"is_correct\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", ""]
+                },
+                "description": "Update a quiz answer (requires authentication)"
+              },
+              "response": []
+            },
+            {
+              "name": "Update All Answers",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "{{authToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": {{userId}},\n  \"answers\": [\n    {\n      \"question_id\": 1,\n      \"option_id\": 2,\n      \"answer_text\": \"Answer 1\"\n    },\n    {\n      \"question_id\": 2,\n      \"option_id\": 4,\n      \"answer_text\": \"Answer 2\"\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/update-All",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", "update-All"]
+                },
+                "description": "Update multiple answers at once (requires authentication)"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Quiz Answer",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/:answerId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", ":answerId"],
+                  "variable": [
+                    {
+                      "key": "answerId",
+                      "value": "1"
+                    }
+                  ]
+                },
+                "description": "Delete a quiz answer by ID"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete User Answers",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/quiz-answers/user/:userId",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "quiz-answers", "user", ":userId"],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": "Delete all answers for a specific user"
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Saved Notes",
+      "item": [
+        {
+          "name": "Create Saved Note (with title)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_history_id\": {{chatHistoryId}},\n  \"title\": \"Property Research Notes\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/saved-notes/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "saved-notes", ""]
+            },
+            "description": "Create a saved note from chat history with a custom title. chat_history_id is required, title is optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Saved Note (auto title)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chat_history_id\": {{chatHistoryId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/saved-notes/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "saved-notes", ""]
+            },
+            "description": "Create a saved note from chat history without title. Will auto-generate title as 'Note from [date]'"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Saved Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/saved-notes/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "saved-notes", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Saved Items (Notes + Budget Calculations)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/saved-notes/all-saved-items?page=1&limit=10&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "saved-notes", "all-saved-items"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (optional, default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page (optional, default: 10)"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search term to filter results (optional)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Saved Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/saved-notes/all-saved-items?search=property&page=1&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "saved-notes", "all-saved-items"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "property",
+                  "description": "Search for items containing 'property'"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "5",
+                  "description": "Items per page"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Saved Items with Pagination",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/saved-notes/all-saved-items?page=2&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "saved-notes", "all-saved-items"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2",
+                  "description": "Second page"
+                },
+                {
+                  "key": "limit",
+                  "value": "5",
+                  "description": "5 items per page"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Saved Note",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Property Research Notes\",\n  \"content\": \"Updated content with new information...\",\n  \"category\": \"research\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/saved-notes/:noteId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "saved-notes", ":noteId"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Saved Note",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/saved-notes/:noteId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "saved-notes", ":noteId"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Settings & Preferences",
+      "item": [
+        {
+          "name": "Get Profile Preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/profile-preferences/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile-preferences", ""]
+            },
+            "description": "Get user's profile preferences. Returns 404 if no preferences exist - use POST to create them first."
+          },
+          "response": []
+        },
+        {
+          "name": "Create/Update Profile Preferences",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"communication_tone\": \"friendly\",\n  \"communication_style\": \"bullet_points\",\n  \"behavior\": \"follow_ups\",\n  \"use_profile_personalization\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/profile-preferences/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile-preferences", ""]
+            },
+            "description": "Create or update profile preferences. Valid values: communication_tone (formal, friendly, encouraging), communication_style (bullet_points, narrative_summary, visual_aids), behavior (follow_ups, link_notes, checklist)"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"communication_tone\": \"formal\",\n  \"communication_style\": \"narrative_summary\",\n  \"behavior\": \"link_notes\",\n  \"use_profile_personalization\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/profile-preferences/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile-preferences", ""]
+            },
+            "description": "Update existing profile preferences. Note: User must have existing preferences first (use POST to create)"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Profile Preferences",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/profile-preferences/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile-preferences", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notification-settings/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notification-settings", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Notification Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_notifications\": true,\n  \"sms_notifications\": false,\n  \"push_notifications\": true,\n  \"property_alerts\": true,\n  \"market_updates\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/notification-settings/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notification-settings", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Specific Notification Setting",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/notification-settings/email_notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notification-settings", "email_notifications"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Notification Settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notification-settings/reset",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notification-settings", "reset"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Notification Settings",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notification-settings/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notification-settings", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Privacy Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacy-settings/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacy-settings", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Privacy Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile_visibility\": \"private\",\n  \"data_sharing\": false,\n  \"marketing_emails\": false,\n  \"analytics_tracking\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacy-settings/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacy-settings", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Specific Privacy Setting",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": \"public\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacy-settings/profile_visibility",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacy-settings", "profile_visibility"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Privacy Settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacy-settings/reset",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacy-settings", "reset"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export User Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacy-settings/export",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacy-settings", "export"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Consent History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacy-settings/consent-history",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacy-settings", "consent-history"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User Data",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacy-settings/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacy-settings", ""]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Property Search (Zoopla)",
+      "item": [
+        {
+          "name": "Search Properties (GET)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/?location=London&property_type=house&min_price=300000&max_price=600000&page=1&page_size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", ""],
+              "query": [
+                {
+                  "key": "location",
+                  "value": "London"
+                },
+                {
+                  "key": "property_type",
+                  "value": "house"
+                },
+                {
+                  "key": "min_price",
+                  "value": "300000"
+                },
+                {
+                  "key": "max_price",
+                  "value": "600000"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Properties (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": \"London\",\n  \"property_type\": \"house\",\n  \"min_price\": 300000,\n  \"max_price\": 600000,\n  \"page\": 1,\n  \"page_size\": 20\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Properties (POST with /search)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": \"Manchester\",\n  \"property_type\": \"apartment\",\n  \"min_price\": 200000,\n  \"max_price\": 400000,\n  \"page\": 1,\n  \"page_size\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/search",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "search"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Bookmark Property",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"property_id\": \"123456\",\n  \"property_data\": {\n    \"title\": \"Beautiful 3-bedroom house\",\n    \"price\": 450000,\n    \"location\": \"London\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/bookmark",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "bookmark"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bookmarked Properties",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/bookmark",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "bookmark"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Documents (AI-Powered)",
+      "item": [
+        {
+          "name": "Upload User Documents",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", "upload"]
+            },
+            "description": "Upload property documents (PDF, DOCX, JPG, PNG). AI will analyze and extract metadata like document type, category, tags, dates, and expiry dates."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Documents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents?page=1&limit=10&category=legal&status=ready&search=lease",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "category",
+                  "value": "legal",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "ready",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "lease",
+                  "disabled": true
+                },
+                {
+                  "key": "sort_by",
+                  "value": "created_at",
+                  "disabled": true
+                },
+                {
+                  "key": "sort_order",
+                  "value": "DESC",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get paginated list of user documents with filtering options (category, status, doc_type, search)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", "stats"]
+            },
+            "description": "Get statistics about user's documents (total count, by category, by status, by type)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get detailed information about a specific document including AI analysis results."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Preview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/preview",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "preview"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Stream document file for preview in browser (PDF, images, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Document",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doc_type\": \"Lease Agreement\",\n  \"status\": \"urgent\",\n  \"category\": \"legal\",\n  \"tags\": [\"lease\", \"tenant\", \"urgent\"],\n  \"date\": \"2024-01-15\",\n  \"expiry_date\": \"2025-01-15\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Update document metadata (doc_type, status, category, tags, dates)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Document Filename",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Document Name.pdf\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/name",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "name"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Update only the filename of a document without affecting other metadata. Filename must be a non-empty string and cannot exceed 255 characters."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Soft delete a document (removes from vector database and marks as inactive)."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Documents",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"lease agreement terms\",\n  \"filters\": {\n    \"category\": \"legal\",\n    \"doc_type\": \"Lease Agreement\",\n    \"tags\": [\"tenant\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/search",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", "search"]
+            },
+            "description": "Search across all user documents using semantic search with optional filters."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Preview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/preview",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "preview"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get a preview of the document content with metadata and extracted information."
+          },
+          "response": []
+        },
+        {
+          "name": "Chat with Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"When does my tenancy agreement expire?\",\n  \"conversation_id\": \"{{conversationId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "chat"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Ask questions about a specific document. AI will use RAG to provide context-aware answers."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Chat History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/chat-history?conversation_id={{conversationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "chat-history"],
+              "query": [
+                {
+                  "key": "conversation_id",
+                  "value": "{{conversationId}}",
+                  "description": "Optional: Get specific conversation history"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get chat history for a specific document. Optionally filter by conversation_id."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Chats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/chats?page=1&limit=20&conversation_id=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "chats"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Number of chats per page (default: 20)"
+                },
+                {
+                  "key": "conversation_id",
+                  "value": "",
+                  "description": "Optional: Filter by specific conversation ID"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get all chats for a document with pagination and optional conversation filtering. Returns chats in reverse chronological order (most recent first)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "summary"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get AI-generated summary of the document highlighting key information."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Suggested Questions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/suggested-questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "suggested-questions"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get AI-generated suggested questions based on document type and content."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Insights",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user-documents/:documentId/insights",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-documents", ":documentId", "insights"],
+              "variable": [
+                {
+                  "key": "documentId",
+                  "value": "{{documentId}}"
+                }
+              ]
+            },
+            "description": "Get detailed AI analysis and insights about the document including potential issues and recommendations."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Server Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-extract token from login response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.token) {",
+          "    pm.collectionVariables.set('authToken', pm.response.json.data.token);",
+          "}",
+          "",
+          "// Auto-extract user ID from login response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.user && pm.response.json.data.user.id) {",
+          "    pm.collectionVariables.set('userId', pm.response.json.data.user.id);",
+          "}",
+          "",
+          "// Auto-extract conversation ID from chat response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.conversation_id) {",
+          "    pm.collectionVariables.set('conversationId', pm.response.json.data.conversation_id);",
+          "}",
+          "",
+          "// Auto-extract document ID from upload response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.documents && pm.response.json.data.documents.length > 0) {",
+          "    pm.collectionVariables.set('documentId', pm.response.json.data.documents[0].id);",
+          "}",
+          "",
+          "// Auto-extract document ID from get documents response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.documents && pm.response.json.data.documents.length > 0) {",
+          "    pm.collectionVariables.set('documentId', pm.response.json.data.documents[0].id);",
+          "}",
+          "",
+          "// Auto-extract budget calculation ID from budget calculation response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.budgetCalculationId) {",
+          "    pm.collectionVariables.set('budgetCalculationId', pm.response.json.data.budgetCalculationId);",
+          "}",
+          "",
+          "// Auto-extract budget calculation ID from budget calculation list response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.budgetCalculations && pm.response.json.data.budgetCalculations.length > 0) {",
+          "    pm.collectionVariables.set('budgetCalculationId', pm.response.json.data.budgetCalculations[0].id);",
+          "}",
+          "",
+          "// Auto-extract chat history ID from chat response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.chat_history_id) {",
+          "    pm.collectionVariables.set('chatHistoryId', pm.response.json.data.chat_history_id);",
+          "}",
+          "",
+          "// Auto-extract chat history ID from chat history response",
+          "if (pm.response && pm.response.json && pm.response.json.data && pm.response.json.data.history && pm.response.json.data.history.length > 0) {",
+          "    pm.collectionVariables.set('chatHistoryId', pm.response.json.data.history[0].id);",
+          "}"
+        ]
+      }
+    }
+  ]
+}

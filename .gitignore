@@ -1,0 +1,11 @@
+node_modules/
+# Ignore temporary image cache
+temp-images/
+.env
+.env_staging
+uploads/
+# Local vector DB / runtime
+qdrant_storage/
+qdrant-local/
+.qdrant-initialized
+.DS_Store

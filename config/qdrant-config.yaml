@@ -1,0 +1,17 @@
+# Minimal Qdrant config for local (non-Docker) run
+# Used when running the Qdrant binary directly - start from project root.
+
+log_level: INFO
+
+storage:
+  storage_path: ./qdrant_storage
+  snapshots_path: ./qdrant_storage/snapshots
+
+service:
+  host: 0.0.0.0
+  http_port: 6333
+  grpc_port: 6334
+  enable_cors: true
+
+cluster:
+  enabled: false
