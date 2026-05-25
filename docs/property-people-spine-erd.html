@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HomeTruth Property + People Spine ERD</title>
+    <link rel="stylesheet" href="../../design-system/tokens/tokens.css" />
+    <style>
+      @font-face {
+        font-family: "HomeTruth Gill Sans";
+        src: url("../../HT_Frontend-staging/public/fonts/gill-sans-light.woff2") format("woff2");
+        font-weight: 300;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "HomeTruth Gill Sans";
+        src: url("../../HT_Frontend-staging/public/fonts/gill-sans-regular.woff2") format("woff2");
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      :root {
+        --page-max: 1240px;
+        --soft-accent: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-default));
+        --soft-action: color-mix(in srgb, var(--color-action-primary) 12%, var(--color-surface-default));
+        --soft-secondary: color-mix(in srgb, var(--color-secondary) 12%, var(--color-surface-default));
+        --soft-success: color-mix(in srgb, var(--color-success) 12%, var(--color-surface-default));
+        --soft-border: color-mix(in srgb, var(--color-border-default) 56%, var(--color-surface-default));
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(180deg, color-mix(in srgb, var(--color-surface-dark) 4%, var(--color-surface-default)), var(--color-surface-default) 360px);
+        color: var(--color-text-default);
+        font-family: var(--font-base);
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      a {
+        color: var(--color-accent);
+      }
+
+      .top-strip {
+        height: var(--space-2);
+        background: var(--grad-brand-h);
+      }
+
+      .page {
+        width: min(100% - var(--space-8), var(--page-max));
+        margin: 0 auto;
+        padding: var(--space-8) 0 var(--space-16);
+      }
+
+      .masthead {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--space-6);
+        align-items: start;
+        padding: var(--space-8);
+        border: 1px solid var(--soft-border);
+        border-radius: var(--radius-lg);
+        background: var(--color-surface-default);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+        margin-bottom: var(--space-6);
+      }
+
+      .brand img {
+        width: 184px;
+        height: auto;
+        display: block;
+      }
+
+      .eyebrow {
+        margin: 0 0 var(--space-2);
+        color: var(--color-secondary);
+        font-size: 0.875rem;
+        font-weight: var(--font-weight-regular);
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-weight: var(--font-weight-regular);
+        line-height: 1.1;
+      }
+
+      h1 {
+        max-width: 760px;
+        font-size: 2.75rem;
+      }
+
+      h2 {
+        font-size: 1.65rem;
+      }
+
+      h3 {
+        font-size: 1rem;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      strong,
+      b {
+        font-weight: var(--font-weight-regular);
+      }
+
+      .lede {
+        max-width: 780px;
+        margin-top: var(--space-4);
+        color: var(--color-text-muted);
+        font-size: 1.15rem;
+      }
+
+      .meta-stack {
+        min-width: 220px;
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .pill {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid var(--soft-border);
+        border-radius: var(--radius-full);
+        background: var(--color-surface-default);
+        color: var(--color-text-default);
+        font-size: 0.875rem;
+        font-weight: var(--font-weight-regular);
+        white-space: nowrap;
+      }
+
+      .pill::before {
+        content: "";
+        width: var(--space-2);
+        height: var(--space-2);
+        border-radius: var(--radius-full);
+        background: var(--color-action-primary);
+      }
+
+      .pill.accent::before {
+        background: var(--color-accent);
+      }
+
+      .pill.secondary::before {
+        background: var(--color-secondary);
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-4);
+        margin-top: var(--space-6);
+      }
+
+      .summary-card {
+        padding: var(--space-4);
+        border: 1px solid var(--soft-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface-default);
+      }
+
+      .summary-card strong {
+        display: block;
+        margin-bottom: var(--space-2);
+        font-size: 1rem;
+      }
+
+      .summary-card span {
+        color: var(--color-text-muted);
+        font-size: 0.95rem;
+      }
+
+      .section {
+        margin-top: var(--space-8);
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--space-4);
+        align-items: end;
+        margin-bottom: var(--space-4);
+      }
+
+      .section-header p {
+        max-width: 680px;
+        color: var(--color-text-muted);
+      }
+
+      .erd-wrap {
+        overflow-x: auto;
+        padding: var(--space-4);
+        border: 1px solid var(--soft-border);
+        border-radius: var(--radius-lg);
+        background:
+          linear-gradient(90deg, color-mix(in srgb, var(--color-surface-dark) 3%, transparent) 1px, transparent 1px),
+          linear-gradient(180deg, color-mix(in srgb, var(--color-surface-dark) 3%, transparent) 1px, transparent 1px),
+          var(--color-surface-default);
+        background-size: var(--space-6) var(--space-6);
+      }
+
+      .erd {
+        position: relative;
+        width: 1180px;
+        height: 720px;
+      }
+
+      .connections {
+        position: absolute;
+        inset: 0;
+        width: 1180px;
+        height: 720px;
+        pointer-events: none;
+      }
+
+      .edge {
+        fill: none;
+        stroke-width: 2.5;
+      }
+
+      .edge.action {
+        stroke: var(--color-action-primary);
+      }
+
+      .edge.accent {
+        stroke: var(--color-accent);
+      }
+
+      .edge.secondary {
+        stroke: var(--color-secondary);
+      }
+
+      .edge.success {
+        stroke: var(--color-success);
+      }
+
+      .edge-label {
+        fill: var(--color-text-muted);
+        font-family: var(--font-base);
+        font-size: 13px;
+        font-weight: var(--font-weight-regular);
+      }
+
+      .entity {
+        position: absolute;
+        width: 230px;
+        border: 1px solid var(--soft-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface-default);
+        overflow: hidden;
+      }
+
+      .entity.identity {
+        border-top: var(--space-1) solid var(--color-accent);
+      }
+
+      .entity.relationship {
+        border-top: var(--space-1) solid var(--color-action-primary);
+      }
+
+      .entity.property {
+        border-top: var(--space-1) solid var(--color-secondary);
+      }
+
+      .entity.evidence {
+        border-top: var(--space-1) solid var(--color-success);
+      }
+
+      .entity-head {
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 1px solid var(--soft-border);
+        background: color-mix(in srgb, var(--color-surface-dark) 3%, var(--color-surface-default));
+      }
+
+      .entity-head span {
+        display: block;
+        color: var(--color-text-muted);
+        font-size: 0.75rem;
+      }
+
+      .entity-fields {
+        display: grid;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4) var(--space-4);
+      }
+
+      .field {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: var(--space-2);
+        align-items: baseline;
+        font-size: 0.875rem;
+      }
+
+      .key {
+        min-width: 24px;
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-sm);
+        color: var(--color-text-default);
+        font-size: 0.68rem;
+        font-weight: var(--font-weight-regular);
+        text-align: center;
+      }
+
+      .key.pk {
+        background: var(--soft-action);
+      }
+
+      .key.fk {
+        background: var(--soft-accent);
+      }
+
+      .key.attr {
+        background: color-mix(in srgb, var(--color-border-default) 32%, var(--color-surface-default));
+      }
+
+      .entity[data-node="users"] {
+        left: 28px;
+        top: 120px;
+      }
+
+      .entity[data-node="property_people"] {
+        left: 318px;
+        top: 110px;
+        width: 250px;
+      }
+
+      .entity[data-node="properties"] {
+        left: 640px;
+        top: 108px;
+        width: 250px;
+      }
+
+      .entity[data-node="property_addresses"] {
+        left: 918px;
+        top: 64px;
+      }
+
+      .entity[data-node="userDocuments"] {
+        left: 28px;
+        top: 420px;
+      }
+
+      .entity[data-node="property_documents"] {
+        left: 318px;
+        top: 410px;
+        width: 250px;
+      }
+
+      .entity[data-node="evidence_sources"] {
+        left: 640px;
+        top: 408px;
+        width: 250px;
+      }
+
+      .entity[data-node="property_facts"] {
+        left: 918px;
+        top: 408px;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+        margin-top: var(--space-4);
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--color-text-muted);
+        font-size: 0.9rem;
+      }
+
+      .legend-swatch {
+        width: var(--space-4);
+        height: var(--space-2);
+        border-radius: var(--radius-full);
+      }
+
+      .legend-swatch.action {
+        background: var(--color-action-primary);
+      }
+
+      .legend-swatch.accent {
+        background: var(--color-accent);
+      }
+
+      .legend-swatch.secondary {
+        background: var(--color-secondary);
+      }
+
+      .legend-swatch.success {
+        background: var(--color-success);
+      }
+
+      .details-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-4);
+      }
+
+      .detail-card {
+        border: 1px solid var(--soft-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface-default);
+        overflow: hidden;
+      }
+
+      .detail-card header {
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--soft-border);
+        background: color-mix(in srgb, var(--color-surface-dark) 3%, var(--color-surface-default));
+      }
+
+      .detail-card header p {
+        margin-top: var(--space-2);
+        color: var(--color-text-muted);
+        font-size: 0.95rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+      }
+
+      th,
+      td {
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 1px solid var(--soft-border);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--color-text-muted);
+        font-size: 0.78rem;
+        font-weight: var(--font-weight-regular);
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      code {
+        color: var(--color-secondary);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 0.9em;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+
+      .flow-step {
+        position: relative;
+        min-height: 120px;
+        padding: var(--space-4);
+        border: 1px solid var(--soft-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface-default);
+      }
+
+      .flow-step::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: calc(var(--space-3) * -1);
+        width: var(--space-3);
+        height: var(--space-1);
+        background: var(--color-accent);
+      }
+
+      .flow-step:last-child::after {
+        display: none;
+      }
+
+      .flow-step strong {
+        display: block;
+        margin-bottom: var(--space-2);
+      }
+
+      .flow-step span {
+        color: var(--color-text-muted);
+        font-size: 0.92rem;
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: var(--space-2) 1fr;
+        gap: var(--space-4);
+        padding: var(--space-4);
+        border: 1px solid var(--soft-border);
+        border-radius: var(--radius-md);
+        background: var(--soft-secondary);
+      }
+
+      .callout::before {
+        content: "";
+        border-radius: var(--radius-full);
+        background: var(--grad-brand);
+      }
+
+      .callout strong {
+        display: block;
+        margin-bottom: var(--space-1);
+      }
+
+      .callout p {
+        color: var(--color-text-muted);
+      }
+
+      @media (max-width: 920px) {
+        .page {
+          width: min(100% - var(--space-4), var(--page-max));
+          padding-top: var(--space-4);
+        }
+
+        .masthead {
+          grid-template-columns: 1fr;
+          padding: var(--space-6);
+        }
+
+        h1 {
+          font-size: 2rem;
+        }
+
+        .summary-grid,
+        .details-grid,
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        .flow-step::after {
+          display: none;
+        }
+
+        .section-header {
+          display: grid;
+          align-items: start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top-strip"></div>
+    <main class="page">
+      <header class="masthead">
+        <div>
+          <div class="brand">
+            <img src="../../design-system/logos/hometruth-logo.png" alt="HomeTruth" />
+          </div>
+          <p class="eyebrow">HT-308 schema reference</p>
+          <h1>Property + People Spine ERD</h1>
+          <p class="lede">
+            A visual reference for the first HomeTruth database spine. The model keeps MySQL as the source of truth while preserving the graph-ready relationships needed for property records, people, documents, evidence and facts.
+          </p>
+        </div>
+        <div class="meta-stack" aria-label="Reference metadata">
+          <span class="pill">Draft for review</span>
+          <span class="pill accent">No migrations run</span>
+          <span class="pill secondary">Graph-ready</span>
+        </div>
+      </header>
+
+      <section class="summary-grid" aria-label="Schema summary">
+        <article class="summary-card">
+          <strong>Property Register</strong>
+          <span>Every home can exist as a property record before it is claimed by a user.</span>
+        </article>
+        <article class="summary-card">
+          <strong>People Experience</strong>
+          <span>People connect to homes through explicit roles, permissions and verification states.</span>
+        </article>
+        <article class="summary-card">
+          <strong>Evidence Layer</strong>
+          <span>Documents create evidence sources; evidence supports structured property facts.</span>
+        </article>
+      </section>
+
+      <section class="section" aria-labelledby="erd-title">
+        <div class="section-header">
+          <div>
+            <h2 id="erd-title">Entity Relationship Diagram</h2>
+            <p>The first slice links the existing <code>users</code> and <code>userDocuments</code> tables into new property, relationship, evidence and fact tables.</p>
+          </div>
+          <span class="pill accent">First schema slice</span>
+        </div>
+
+        <div class="erd-wrap">
+          <div class="erd" role="img" aria-label="ERD showing users connected to properties through property_people, userDocuments connected to properties through property_documents, and evidence_sources supporting property_facts.">
+            <svg class="connections" viewBox="0 0 1180 720" aria-hidden="true">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-secondary)"></path>
+                </marker>
+              </defs>
+
+              <path class="edge accent" d="M258 198 C282 198 292 198 318 198" marker-end="url(#arrow)"></path>
+              <text class="edge-label" x="268" y="186">1:N roles</text>
+
+              <path class="edge action" d="M568 198 C596 198 610 198 640 198" marker-end="url(#arrow)"></path>
+              <text class="edge-label" x="579" y="186">N:1 home</text>
+
+              <path class="edge secondary" d="M890 168 C906 148 906 132 918 124" marker-end="url(#arrow)"></path>
+              <text class="edge-label" x="888" y="104">1:N addresses</text>
+
+              <path class="edge accent" d="M258 496 C282 496 292 496 318 496" marker-end="url(#arrow)"></path>
+              <text class="edge-label" x="266" y="484">1:N links</text>
+
+              <path class="edge secondary" d="M710 254 C688 330 608 398 568 468" marker-end="url(#arrow)"></path>
+              <text class="edge-label" x="615" y="350">property context</text>
+
+              <path class="edge success" d="M568 496 C596 496 610 496 640 496" marker-end="url(#arrow)"></path>
+              <text class="edge-label" x="575" y="484">provides evidence</text>
+
+              <path class="edge success" d="M890 496 C904 496 906 496 918 496" marker-end="url(#arrow)"></path>
+              <text class="edge-label" x="884" y="484">supports</text>
+
+              <path class="edge secondary" d="M765 254 C846 310 925 352 1008 408" marker-end="url(#arrow)"></path>
+              <text class="edge-label" x="880" y="346">has facts</text>
+            </svg>
+
+            <article class="entity identity" data-node="users">
+              <div class="entity-head">
+                <h3>users</h3>
+                <span>existing account table</span>
+              </div>
+              <div class="entity-fields">
+                <div class="field"><span class="key pk">PK</span><span>id</span></div>
+                <div class="field"><span class="key attr">A</span><span>email, name</span></div>
+                <div class="field"><span class="key attr">A</span><span>role, home_address</span></div>
+              </div>
+            </article>
+
+            <article class="entity relationship" data-node="property_people">
+              <div class="entity-head">
+                <h3>property_people</h3>
+                <span>people-to-property relationship</span>
+              </div>
+              <div class="entity-fields">
+                <div class="field"><span class="key pk">PK</span><span>id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>property_id, user_id</span></div>
+                <div class="field"><span class="key attr">A</span><span>relationship_type</span></div>
+                <div class="field"><span class="key attr">A</span><span>permission_level</span></div>
+              </div>
+            </article>
+
+            <article class="entity property" data-node="properties">
+              <div class="entity-head">
+                <h3>properties</h3>
+                <span>canonical home record</span>
+              </div>
+              <div class="entity-fields">
+                <div class="field"><span class="key pk">PK</span><span>id</span></div>
+                <div class="field"><span class="key attr">A</span><span>uprn, property_type</span></div>
+                <div class="field"><span class="key attr">A</span><span>tenure, lifecycle_status</span></div>
+                <div class="field"><span class="key fk">FK</span><span>created_by_user_id</span></div>
+              </div>
+            </article>
+
+            <article class="entity property" data-node="property_addresses">
+              <div class="entity-head">
+                <h3>property_addresses</h3>
+                <span>canonical address history</span>
+              </div>
+              <div class="entity-fields">
+                <div class="field"><span class="key pk">PK</span><span>id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>property_id</span></div>
+                <div class="field"><span class="key attr">A</span><span>postcode, country</span></div>
+                <div class="field"><span class="key attr">A</span><span>confidence, source_type</span></div>
+              </div>
+            </article>
+
+            <article class="entity identity" data-node="userDocuments">
+              <div class="entity-head">
+                <h3>userDocuments</h3>
+                <span>existing upload vault</span>
+              </div>
+              <div class="entity-fields">
+                <div class="field"><span class="key pk">PK</span><span>id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>user_id</span></div>
+                <div class="field"><span class="key attr">A</span><span>name, category, status</span></div>
+                <div class="field"><span class="key attr">A</span><span>file_path, text_content</span></div>
+              </div>
+            </article>
+
+            <article class="entity relationship" data-node="property_documents">
+              <div class="entity-head">
+                <h3>property_documents</h3>
+                <span>document-to-property link</span>
+              </div>
+              <div class="entity-fields">
+                <div class="field"><span class="key pk">PK</span><span>id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>property_id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>user_document_id</span></div>
+                <div class="field"><span class="key attr">A</span><span>relevance, expiry_date</span></div>
+              </div>
+            </article>
+
+            <article class="entity evidence" data-node="evidence_sources">
+              <div class="entity-head">
+                <h3>evidence_sources</h3>
+                <span>provenance record</span>
+              </div>
+              <div class="entity-fields">
+                <div class="field"><span class="key pk">PK</span><span>id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>property_id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>property_document_id</span></div>
+                <div class="field"><span class="key attr">A</span><span>method, locator, confidence</span></div>
+              </div>
+            </article>
+
+            <article class="entity evidence" data-node="property_facts">
+              <div class="entity-head">
+                <h3>property_facts</h3>
+                <span>structured property truth</span>
+              </div>
+              <div class="entity-fields">
+                <div class="field"><span class="key pk">PK</span><span>id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>property_id</span></div>
+                <div class="field"><span class="key fk">FK</span><span>evidence_source_id</span></div>
+                <div class="field"><span class="key attr">A</span><span>fact_type, value_json</span></div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="legend" aria-label="ERD legend">
+          <span class="legend-item"><span class="legend-swatch accent"></span>Existing identity/data source</span>
+          <span class="legend-item"><span class="legend-swatch action"></span>Relationship table</span>
+          <span class="legend-item"><span class="legend-swatch secondary"></span>Property register</span>
+          <span class="legend-item"><span class="legend-swatch success"></span>Evidence and facts</span>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="flow-title">
+        <div class="section-header">
+          <div>
+            <h2 id="flow-title">How Data Moves</h2>
+            <p>The core flow turns people and documents into property intelligence without losing source evidence.</p>
+          </div>
+        </div>
+        <div class="flow">
+          <article class="flow-step">
+            <strong>1. Create or match property</strong>
+            <span>A home exists in <code>properties</code> with address rows in <code>property_addresses</code>.</span>
+          </article>
+          <article class="flow-step">
+            <strong>2. Connect person</strong>
+            <span><code>property_people</code> records role, permission and verification for that user.</span>
+          </article>
+          <article class="flow-step">
+            <strong>3. Link document</strong>
+            <span>Existing <code>userDocuments</code> records are attached through <code>property_documents</code>.</span>
+          </article>
+          <article class="flow-step">
+            <strong>4. Preserve evidence</strong>
+            <span><code>evidence_sources</code> records source, locator, method and confidence.</span>
+          </article>
+          <article class="flow-step">
+            <strong>5. Store fact</strong>
+            <span><code>property_facts</code> stores the structured claim and its verification state.</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="table-title">
+        <div class="section-header">
+          <div>
+            <h2 id="table-title">Table Reference</h2>
+            <p>Condensed reference for the first six new tables. Full column details remain in the Markdown schema contract.</p>
+          </div>
+        </div>
+        <div class="details-grid">
+          <article class="detail-card">
+            <header>
+              <h3>properties</h3>
+              <p>Canonical property record. A property can exist before any user claims it.</p>
+            </header>
+            <table>
+              <thead><tr><th>Key columns</th><th>Indexes</th></tr></thead>
+              <tbody>
+                <tr><td><code>id</code>, <code>uprn</code>, <code>property_type</code>, <code>tenure</code>, <code>lifecycle_status</code></td><td><code>uprn</code>, <code>source_type/source_ref</code>, <code>created_by_user_id</code></td></tr>
+              </tbody>
+            </table>
+          </article>
+
+          <article class="detail-card">
+            <header>
+              <h3>property_addresses</h3>
+              <p>Canonical and historical address rows for a property.</p>
+            </header>
+            <table>
+              <thead><tr><th>Key columns</th><th>Indexes</th></tr></thead>
+              <tbody>
+                <tr><td><code>property_id</code>, <code>postcode</code>, <code>address_fingerprint</code>, <code>source_type</code>, <code>confidence</code></td><td><code>property_id</code>, <code>postcode</code>, <code>address_fingerprint</code>, <code>property_id/is_current</code></td></tr>
+              </tbody>
+            </table>
+          </article>
+
+          <article class="detail-card">
+            <header>
+              <h3>property_people</h3>
+              <p>Property-specific roles, permissions and verification for users.</p>
+            </header>
+            <table>
+              <thead><tr><th>Key columns</th><th>Indexes</th></tr></thead>
+              <tbody>
+                <tr><td><code>property_id</code>, <code>user_id</code>, <code>relationship_type</code>, <code>permission_level</code>, <code>verification_status</code></td><td><code>property_id</code>, <code>user_id</code>, <code>property_id/relationship_type</code></td></tr>
+              </tbody>
+            </table>
+          </article>
+
+          <article class="detail-card">
+            <header>
+              <h3>property_documents</h3>
+              <p>Property context for existing uploaded user documents.</p>
+            </header>
+            <table>
+              <thead><tr><th>Key columns</th><th>Indexes</th></tr></thead>
+              <tbody>
+                <tr><td><code>property_id</code>, <code>user_document_id</code>, <code>linked_by_user_id</code>, <code>relevance</code>, <code>expiry_date</code></td><td><code>property_id/user_document_id</code>, <code>user_document_id</code>, <code>property_id/expiry_date</code></td></tr>
+              </tbody>
+            </table>
+          </article>
+
+          <article class="detail-card">
+            <header>
+              <h3>evidence_sources</h3>
+              <p>Provenance behind a property fact or future insight.</p>
+            </header>
+            <table>
+              <thead><tr><th>Key columns</th><th>Indexes</th></tr></thead>
+              <tbody>
+                <tr><td><code>property_id</code>, <code>property_document_id</code>, <code>source_type</code>, <code>extraction_method</code>, <code>locator</code>, <code>confidence</code></td><td><code>property_id</code>, <code>property_document_id</code>, <code>source_type</code>, <code>extraction_method</code></td></tr>
+              </tbody>
+            </table>
+          </article>
+
+          <article class="detail-card">
+            <header>
+              <h3>property_facts</h3>
+              <p>Structured, evidence-backed claims about a home.</p>
+            </header>
+            <table>
+              <thead><tr><th>Key columns</th><th>Indexes</th></tr></thead>
+              <tbody>
+                <tr><td><code>property_id</code>, <code>evidence_source_id</code>, <code>fact_namespace</code>, <code>fact_type</code>, <code>value_json</code>, <code>verification_status</code></td><td><code>property_id/fact_type</code>, <code>property_id/is_current</code>, <code>verification_status</code></td></tr>
+              </tbody>
+            </table>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-label="Implementation note">
+        <div class="callout">
+          <div>
+            <strong>Implementation boundary</strong>
+            <p>This reference is for review. HT-308 does not run migrations. The next ticket should implement the accepted migration and Sequelize models as HT-309.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

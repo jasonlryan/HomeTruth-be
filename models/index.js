@@ -25,6 +25,12 @@ const UserDocumentChatHistory = require("./userDocumentChatHistory");
 const Waitlist = require("./waitlist");
 const GuestChatSession = require("./guestChatSession");
 const Article = require("./article");
+const Property = require("./property");
+const PropertyAddress = require("./propertyAddress");
+const PropertyPerson = require("./propertyPerson");
+const PropertyDocument = require("./propertyDocument");
+const EvidenceSource = require("./evidenceSource");
+const PropertyFact = require("./propertyFact");
 
 
 
@@ -169,30 +175,184 @@ Article.belongsTo(User, {
   foreignKey: "created_by",
 });
 
-// Sync
-db.sync({ alter: true })
-  .then(async () => {
-    console.log("All tables created and associated");
+// Property + people spine associations
+User.hasMany(Property, {
+  foreignKey: "created_by_user_id",
+  as: "createdProperties",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
 
-    // Run seeders
-    (async () => {
-      try {
-        const { seedQuizQuestions } = require("../Seeders/seedQuizQuestions");
-        const { seedQuizOptions } = require("../Seeders/seedQuizOptions");
-        const { seedAdminUser } = require("../Seeders/seedAdminUser");
-    
-        await seedQuizQuestions();
-        await seedQuizOptions();
-        await seedAdminUser();
-      } catch (error) {
-        console.error("Error running seeders:", error);
-      }
-    })();
-    
-   })
-  .catch((err) => {
-    console.error("Error syncing database:", err);
-  });
+Property.belongsTo(User, {
+  foreignKey: "created_by_user_id",
+  as: "createdBy",
+});
+
+Property.hasMany(PropertyAddress, {
+  foreignKey: "property_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyAddress.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
+Property.hasMany(PropertyPerson, {
+  foreignKey: "property_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyPerson.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
+User.hasMany(PropertyPerson, {
+  foreignKey: "user_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyPerson.belongsTo(User, {
+  foreignKey: "user_id",
+});
+
+Property.hasMany(PropertyDocument, {
+  foreignKey: "property_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyDocument.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
+UserDocument.hasMany(PropertyDocument, {
+  foreignKey: "user_document_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyDocument.belongsTo(UserDocument, {
+  foreignKey: "user_document_id",
+});
+
+User.hasMany(PropertyDocument, {
+  foreignKey: "linked_by_user_id",
+  as: "linkedPropertyDocuments",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PropertyDocument.belongsTo(User, {
+  foreignKey: "linked_by_user_id",
+  as: "linkedBy",
+});
+
+Property.hasMany(EvidenceSource, {
+  foreignKey: "property_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+EvidenceSource.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
+PropertyDocument.hasMany(EvidenceSource, {
+  foreignKey: "property_document_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+EvidenceSource.belongsTo(PropertyDocument, {
+  foreignKey: "property_document_id",
+});
+
+UserDocument.hasMany(EvidenceSource, {
+  foreignKey: "user_document_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+EvidenceSource.belongsTo(UserDocument, {
+  foreignKey: "user_document_id",
+});
+
+User.hasMany(EvidenceSource, {
+  foreignKey: "extracted_by_user_id",
+  as: "extractedEvidenceSources",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+EvidenceSource.belongsTo(User, {
+  foreignKey: "extracted_by_user_id",
+  as: "extractedBy",
+});
+
+Property.hasMany(PropertyFact, {
+  foreignKey: "property_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyFact.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
+EvidenceSource.hasMany(PropertyFact, {
+  foreignKey: "evidence_source_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PropertyFact.belongsTo(EvidenceSource, {
+  foreignKey: "evidence_source_id",
+});
+
+User.hasMany(PropertyFact, {
+  foreignKey: "created_by_user_id",
+  as: "createdPropertyFacts",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PropertyFact.belongsTo(User, {
+  foreignKey: "created_by_user_id",
+  as: "createdBy",
+});
+
+const runSeeders = async () => {
+  try {
+    const { seedQuizQuestions } = require("../Seeders/seedQuizQuestions");
+    const { seedQuizOptions } = require("../Seeders/seedQuizOptions");
+    const { seedAdminUser } = require("../Seeders/seedAdminUser");
+
+    await seedQuizQuestions();
+    await seedQuizOptions();
+    await seedAdminUser();
+  } catch (error) {
+    console.error("Error running seeders:", error);
+  }
+};
+
+if (process.env.AUTO_SYNC_DB === "true") {
+  db.sync({ alter: true })
+    .then(async () => {
+      console.log("AUTO_SYNC_DB enabled: database schema synced from models");
+      await runSeeders();
+    })
+    .catch((err) => {
+      console.error("Error syncing database:", err);
+    });
+} else {
+  console.log(
+    "Skipping automatic Sequelize sync. Run `npm run db:migrate` for schema changes, or set AUTO_SYNC_DB=true for local prototyping."
+  );
+}
+
 module.exports = {
   User, 
   UserProfile,
@@ -215,4 +375,10 @@ module.exports = {
   Waitlist,
   GuestChatSession,
   Article,
+  Property,
+  PropertyAddress,
+  PropertyPerson,
+  PropertyDocument,
+  EvidenceSource,
+  PropertyFact,
 };
