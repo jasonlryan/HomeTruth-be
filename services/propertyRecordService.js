@@ -3,10 +3,10 @@ const {
   Property,
   PropertyAddress,
   PropertyPerson,
-  PropertyFact,
 } = require("../models");
 const sequelize = require("../config/database");
 const PropertyDocumentService = require("./propertyDocumentService");
+const PropertyFactService = require("./propertyFactService");
 
 const PROPERTY_TYPES = new Set([
   "house",
@@ -136,27 +136,6 @@ const toRelationshipResponse = (relationship) => {
   };
 };
 
-const toFactResponse = (fact) => ({
-  id: fact.id,
-  propertyId: fact.property_id,
-  evidenceSourceId: fact.evidence_source_id,
-  factNamespace: fact.fact_namespace,
-  factType: fact.fact_type,
-  value: fact.value_json,
-  displayValue: fact.display_value,
-  unit: fact.unit,
-  validFrom: fact.valid_from,
-  validTo: fact.valid_to,
-  observedAt: fact.observed_at,
-  isCurrent: fact.is_current,
-  confidence: fact.confidence,
-  verificationStatus: fact.verification_status,
-  createdFrom: fact.created_from,
-  createdByUserId: fact.created_by_user_id,
-  createdAt: fact.createdAt,
-  updatedAt: fact.updatedAt,
-});
-
 const toPropertyPayload = (payload = {}, userId) => {
   const propertyType = payload.propertyType || "unknown";
   const tenure = payload.tenure || "unknown";
@@ -204,30 +183,23 @@ const toAddressPayload = (payload = {}) => {
 };
 
 const buildProfile = async (property, relationship, options = {}) => {
-  const [currentAddress, linkedDocuments, currentFacts] = await Promise.all([
-    PropertyAddress.findOne({
-      where: {
-        property_id: property.id,
-        is_current: true,
-      },
-      order: [["updatedAt", "DESC"]],
-      transaction: options.transaction,
-    }),
-    PropertyDocumentService.listLinkedDocumentsForProperty(property.id, {
-      transaction: options.transaction,
-    }),
-    PropertyFact.findAll({
-      where: {
-        property_id: property.id,
-        is_current: true,
-      },
-      order: [
-        ["fact_namespace", "ASC"],
-        ["fact_type", "ASC"],
-      ],
-      transaction: options.transaction,
-    }),
-  ]);
+  const [currentAddress, linkedDocuments, currentFactSummary] =
+    await Promise.all([
+      PropertyAddress.findOne({
+        where: {
+          property_id: property.id,
+          is_current: true,
+        },
+        order: [["updatedAt", "DESC"]],
+        transaction: options.transaction,
+      }),
+      PropertyDocumentService.listLinkedDocumentsForProperty(property.id, {
+        transaction: options.transaction,
+      }),
+      PropertyFactService.listCurrentFactsForProperty(property.id, {
+        transaction: options.transaction,
+      }),
+    ]);
 
   return {
     property: toPropertyResponse(property),
@@ -235,7 +207,8 @@ const buildProfile = async (property, relationship, options = {}) => {
     relationship: toRelationshipResponse(relationship),
     linkedDocumentCount: linkedDocuments.length,
     linkedDocuments,
-    currentFacts: currentFacts.map(toFactResponse),
+    currentFacts: currentFactSummary.facts,
+    currentFactsByNamespace: currentFactSummary.groupedFacts,
   };
 };
 
