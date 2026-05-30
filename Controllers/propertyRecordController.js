@@ -1,4 +1,5 @@
 const PropertyRecordService = require("../services/propertyRecordService");
+const PropertyDocumentService = require("../services/propertyDocumentService");
 
 const handleError = (res, error) => {
   const statusCode = error.statusCode || 500;
@@ -68,6 +69,40 @@ class PropertyRecordController {
       );
 
       return res.json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  }
+
+  static async listPropertyDocuments(req, res) {
+    try {
+      const data = await PropertyDocumentService.listPropertyDocuments(
+        req.user.id,
+        req.params.id
+      );
+
+      return res.json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  }
+
+  static async linkPropertyDocument(req, res) {
+    try {
+      const data = await PropertyDocumentService.linkUserDocumentToProperty(
+        req.user.id,
+        req.params.id,
+        req.body.documentId || req.body.document_id,
+        req.body
+      );
+
+      return res.status(201).json({
         success: true,
         data,
       });

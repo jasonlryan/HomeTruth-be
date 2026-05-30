@@ -4,6 +4,7 @@ const multer = require('multer');
 const { UserDocument } = require('../models');
 const UserDocumentAnalysisService = require('../services/userDocumentAnalysisService');
 const UserDocumentVectorService = require('../services/userDocumentVectorService');
+const PropertyDocumentService = require('../services/propertyDocumentService');
 const DocumentProcessor = require('../utils/documentProcessor');
 const pdf = require('pdf-parse');
 const { fromPath } = require('pdf2pic');
@@ -51,6 +52,40 @@ class UserDocumentController {
                     success: false,
                     message: 'No files uploaded'
                 });
+            }
+
+            const propertyId = req.body.propertyId || req.body.property_id;
+            const shouldLinkToProperty = propertyId !== undefined && propertyId !== null && propertyId !== "";
+            const propertyLinkPayload = {
+                documentRole: req.body.documentRole,
+                document_role: req.body.document_role,
+                relevance: req.body.relevance,
+                effectiveDate: req.body.effectiveDate,
+                effective_date: req.body.effective_date,
+                expiryDate: req.body.expiryDate,
+                expiry_date: req.body.expiry_date
+            };
+
+            let normalizedPropertyId = null;
+            if (shouldLinkToProperty) {
+                try {
+                    normalizedPropertyId = await PropertyDocumentService.assertCanLinkToProperty(
+                        req.user.id,
+                        propertyId,
+                        propertyLinkPayload
+                    );
+                } catch (linkError) {
+                    req.files.forEach(file => {
+                        if (fs.existsSync(file.path)) {
+                            fs.unlinkSync(file.path);
+                        }
+                    });
+
+                    return res.status(linkError.statusCode || 400).json({
+                        success: false,
+                        message: linkError.message
+                    });
+                }
             }
 
             const results = [];
@@ -105,6 +140,16 @@ class UserDocumentController {
                         vector_ids: vectorIds
                     });
 
+                    let propertyLink = null;
+                    if (normalizedPropertyId) {
+                        propertyLink = await PropertyDocumentService.linkUserDocumentToProperty(
+                            req.user.id,
+                            normalizedPropertyId,
+                            userDocument.id,
+                            propertyLinkPayload
+                        );
+                    }
+
                     documents.push({
                         id: userDocument.id,
                         name: userDocument.name,
@@ -117,7 +162,8 @@ class UserDocumentController {
                         file_type: userDocument.file_type,
                         file_size: userDocument.file_size,
                         chunks_count: userDocument.chunks_count,
-                        processed_at: userDocument.processed_at
+                        processed_at: userDocument.processed_at,
+                        property_link: propertyLink
                     });
 
                     results.push({

@@ -3,10 +3,10 @@ const {
   Property,
   PropertyAddress,
   PropertyPerson,
-  PropertyDocument,
   PropertyFact,
 } = require("../models");
 const sequelize = require("../config/database");
+const PropertyDocumentService = require("./propertyDocumentService");
 
 const PROPERTY_TYPES = new Set([
   "house",
@@ -204,7 +204,7 @@ const toAddressPayload = (payload = {}) => {
 };
 
 const buildProfile = async (property, relationship, options = {}) => {
-  const [currentAddress, linkedDocumentCount, currentFacts] = await Promise.all([
+  const [currentAddress, linkedDocuments, currentFacts] = await Promise.all([
     PropertyAddress.findOne({
       where: {
         property_id: property.id,
@@ -213,11 +213,7 @@ const buildProfile = async (property, relationship, options = {}) => {
       order: [["updatedAt", "DESC"]],
       transaction: options.transaction,
     }),
-    PropertyDocument.count({
-      where: {
-        property_id: property.id,
-        is_active: true,
-      },
+    PropertyDocumentService.listLinkedDocumentsForProperty(property.id, {
       transaction: options.transaction,
     }),
     PropertyFact.findAll({
@@ -237,7 +233,8 @@ const buildProfile = async (property, relationship, options = {}) => {
     property: toPropertyResponse(property),
     currentAddress: toAddressResponse(currentAddress),
     relationship: toRelationshipResponse(relationship),
-    linkedDocumentCount,
+    linkedDocumentCount: linkedDocuments.length,
+    linkedDocuments,
     currentFacts: currentFacts.map(toFactResponse),
   };
 };
