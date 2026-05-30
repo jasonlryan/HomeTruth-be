@@ -54,11 +54,13 @@ const userDocumentRoutes = require("./routes/userDocumentRoutes");
 const waitlistRoute = require("./routes/waitlistRoute");
 const propertyRecordRoutes = require("./routes/propertyRecordRoutes");
 const partnerOnboardingRoutes = require("./routes/partnerOnboardingRoutes");
+const pilotFeedbackRoutes = require("./routes/pilotFeedbackRoutes");
 // const zoopla = require("./routes/zoppla/zoopla");
 const propertyRoutes = require('./routes/zoppla/properties');
 const adminDashboardRoutes = require('./routes/admin/adminDashboardRoutes');
 const adminDataRoutes = require('./routes/admin/adminDataRoutes');
 const adminArticleRoutes = require('./routes/admin/adminArticleRoutes');
+const adminPilotRoutes = require('./routes/admin/adminPilotRoutes');
 const articleRoutes = require('./routes/articleRoutes');
 
 
@@ -81,10 +83,12 @@ app.use("/api/user-documents", userDocumentRoutes);
 app.use("/api/waitlist", waitlistRoute);
 app.use('/api/property-records', propertyRecordRoutes);
 app.use('/api/partner-onboarding', partnerOnboardingRoutes);
+app.use('/api/pilot', pilotFeedbackRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/admin/users', adminDataRoutes);
 app.use('/api/admin/articles', adminArticleRoutes);
+app.use('/api/admin/pilot', adminPilotRoutes);
 app.use('/api/articles', articleRoutes);
 
 // app.use("/api/zoopla", zoopla);

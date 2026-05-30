@@ -37,6 +37,7 @@ const Partner = require("./partner");
 const PartnerCohort = require("./partnerCohort");
 const CohortMember = require("./cohortMember");
 const ConsentRecord = require("./consentRecord");
+const PilotEvent = require("./pilotEvent");
 
 
 
@@ -485,6 +486,56 @@ ConsentRecord.belongsTo(Property, {
   foreignKey: "property_id",
 });
 
+Partner.hasMany(PilotEvent, {
+  foreignKey: "partner_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PilotEvent.belongsTo(Partner, {
+  foreignKey: "partner_id",
+});
+
+PartnerCohort.hasMany(PilotEvent, {
+  foreignKey: "partner_cohort_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PilotEvent.belongsTo(PartnerCohort, {
+  foreignKey: "partner_cohort_id",
+});
+
+CohortMember.hasMany(PilotEvent, {
+  foreignKey: "cohort_member_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PilotEvent.belongsTo(CohortMember, {
+  foreignKey: "cohort_member_id",
+});
+
+User.hasMany(PilotEvent, {
+  foreignKey: "user_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PilotEvent.belongsTo(User, {
+  foreignKey: "user_id",
+});
+
+Property.hasMany(PilotEvent, {
+  foreignKey: "property_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PilotEvent.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
 const runSeeders = async () => {
   try {
     const { seedQuizQuestions } = require("../Seeders/seedQuizQuestions");
@@ -548,4 +599,5 @@ module.exports = {
   PartnerCohort,
   CohortMember,
   ConsentRecord,
+  PilotEvent,
 };

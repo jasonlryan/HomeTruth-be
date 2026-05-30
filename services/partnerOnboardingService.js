@@ -6,6 +6,7 @@ const {
   Property,
   PropertyPerson,
 } = require("../models");
+const PilotAnalyticsService = require("./pilotAnalyticsService");
 
 const VALID_COHORT_STATUSES = new Set(["planned", "active"]);
 const VALID_MEMBER_STATUSES = new Set(["invited", "onboarded", "active"]);
@@ -105,6 +106,15 @@ const toBrandingResponse = (partner, cohort) => ({
   cohortName: cohort.name,
   productName: "HomeTruth",
 });
+
+const recordPilotEventSilently = async (payload) => {
+  try {
+    return await PilotAnalyticsService.recordEvent(payload);
+  } catch (error) {
+    console.error("Pilot event capture failed:", error.message);
+    return null;
+  }
+};
 
 const validateCohortState = (partner, cohort) => {
   if (!partner || partner.status !== "active") {
@@ -430,6 +440,43 @@ class PartnerOnboardingService {
       })
     );
 
+    await recordPilotEventSilently({
+      eventName: "signup_completed",
+      userId,
+      partnerId: claimed.partner.id,
+      partnerCohortId: claimed.cohort.id,
+      cohortMemberId: claimed.member.id,
+      partnerContextAllowed: true,
+      sourceType: "partner_onboarding",
+      sourceModel: "CohortMember",
+      sourceId: claimed.member.id,
+      metadata: {
+        inviteMode: claimed.invite.mode,
+        consentVersion,
+      },
+    });
+
+    await recordPilotEventSilently({
+      eventName: "consent_recorded",
+      userId,
+      partnerId: claimed.partner.id,
+      partnerCohortId: claimed.cohort.id,
+      cohortMemberId: claimed.member.id,
+      partnerContextAllowed: true,
+      sourceType: "partner_onboarding",
+      sourceModel: "ConsentRecord",
+      sourceId: records[0]?.id || null,
+      metadata: {
+        consentVersion,
+        grantedScopes: records
+          .filter((record) => record.status === "granted")
+          .map((record) => record.consent_scope),
+        withdrawnScopes: records
+          .filter((record) => record.status === "withdrawn")
+          .map((record) => record.consent_scope),
+      },
+    });
+
     return {
       ...claimed,
       consents: records.map(toConsentResponse),
@@ -468,6 +515,18 @@ class PartnerOnboardingService {
           : member.membership_status,
     });
 
+    await recordPilotEventSilently({
+      eventName: "property_setup_completed",
+      userId,
+      propertyId: property.id,
+      sourceType: "partner_onboarding",
+      sourceModel: "CohortMember",
+      sourceId: member.id,
+      metadata: {
+        membershipStatus: member.membership_status,
+      },
+    });
+
     return {
       ...claimed,
       member: toMemberResponse(member),
@@ -480,15 +539,14 @@ class PartnerOnboardingService {
       throw new PartnerOnboardingError("eventName is required", 400, "invalid");
     }
 
-    const event = {
+    const event = await PilotAnalyticsService.recordEvent({
       eventName,
       inviteCode: payload.inviteCode || payload.invite_code || null,
       userId: userId || null,
+      propertyId: payload.propertyId || payload.property_id || null,
+      sourceType: "partner_onboarding",
       metadata: payload.metadata || {},
-      emittedAt: new Date().toISOString(),
-    };
-
-    console.info("partner_onboarding_event", event);
+    });
 
     return event;
   }

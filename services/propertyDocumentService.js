@@ -3,6 +3,7 @@ const {
   PropertyPerson,
   UserDocument,
 } = require("../models");
+const PilotAnalyticsService = require("./pilotAnalyticsService");
 
 const CONTRIBUTOR_PERMISSION_LEVELS = new Set(["contribute", "manage", "admin"]);
 const READ_PERMISSION_LEVELS = new Set(["read", "contribute", "manage", "admin"]);
@@ -89,6 +90,15 @@ const toPropertyDocumentResponse = (link, document) => ({
   updatedAt: link.updatedAt,
   document: document ? toUserDocumentResponse(document) : null,
 });
+
+const recordPilotEventSilently = async (payload, options = {}) => {
+  try {
+    return await PilotAnalyticsService.recordEvent(payload, options);
+  } catch (error) {
+    console.error("Pilot event capture failed:", error.message);
+    return null;
+  }
+};
 
 const getActiveRelationship = async (userId, propertyId, options = {}) =>
   PropertyPerson.findOne({
@@ -231,6 +241,25 @@ class PropertyDocumentService {
         is_active: true,
       },
       { transaction: options.transaction }
+    );
+
+    await recordPilotEventSilently(
+      {
+        eventName: "document_linked",
+        userId,
+        propertyId: normalizedPropertyId,
+        sourceType: "property_document",
+        sourceModel: "PropertyDocument",
+        sourceId: link.id,
+        metadata: {
+          relevance: link.relevance,
+          documentRole: link.document_role,
+          documentType: document.doc_type,
+          documentCategory: document.category,
+          hasExpiryDate: Boolean(link.expiry_date || document.expiry_date),
+        },
+      },
+      options
     );
 
     return toPropertyDocumentResponse(link, document);

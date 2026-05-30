@@ -6,6 +6,7 @@ const {
   PropertyPerson,
   UserDocument,
 } = require("../models");
+const PilotAnalyticsService = require("./pilotAnalyticsService");
 
 const READ_PERMISSION_LEVELS = new Set(["read", "contribute", "manage", "admin"]);
 const CONTRIBUTOR_PERMISSION_LEVELS = new Set(["contribute", "manage", "admin"]);
@@ -321,6 +322,15 @@ const findLinkedPropertyDocument = async (propertyId, propertyDocumentId, option
     transaction: options.transaction,
   });
 
+const recordPilotEventSilently = async (payload, options = {}) => {
+  try {
+    return await PilotAnalyticsService.recordEvent(payload, options);
+  } catch (error) {
+    console.error("Pilot event capture failed:", error.message);
+    return null;
+  }
+};
+
 class PropertyFactService {
   static async listCurrentFactsForProperty(propertyId, options = {}) {
     const normalizedPropertyId = toIntegerId(propertyId, "propertyId");
@@ -492,6 +502,25 @@ class PropertyFactService {
           property_id: normalizedPropertyId,
           evidence_source_id: evidenceSourceId,
           created_by_user_id: userId,
+        },
+        { transaction }
+      );
+
+      await recordPilotEventSilently(
+        {
+          eventName: "fact_created",
+          userId,
+          propertyId: normalizedPropertyId,
+          sourceType: "property_fact",
+          sourceModel: "PropertyFact",
+          sourceId: fact.id,
+          metadata: {
+            factNamespace: fact.fact_namespace,
+            factType: fact.fact_type,
+            verificationStatus: fact.verification_status,
+            createdFrom: fact.created_from,
+            hasEvidenceSource: Boolean(evidenceSourceId),
+          },
         },
         { transaction }
       );

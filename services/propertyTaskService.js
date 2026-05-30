@@ -11,6 +11,7 @@ const {
   PropertyTaskStatusEvent,
   UserDocument,
 } = require("../models");
+const PilotAnalyticsService = require("./pilotAnalyticsService");
 
 const READ_PERMISSION_LEVELS = new Set(["read", "contribute", "manage", "admin"]);
 const CONTRIBUTOR_PERMISSION_LEVELS = new Set(["contribute", "manage", "admin"]);
@@ -159,6 +160,15 @@ const toTaskResponse = (task) => ({
   createdAt: task.createdAt,
   updatedAt: task.updatedAt,
 });
+
+const recordPilotEventSilently = async (payload, options = {}) => {
+  try {
+    return await PilotAnalyticsService.recordEvent(payload, options);
+  } catch (error) {
+    console.error("Pilot event capture failed:", error.message);
+    return null;
+  }
+};
 
 const makeTask = (propertyId, keySuffix, proposal) => ({
   ...proposal,
@@ -574,6 +584,23 @@ class PropertyTaskService {
         { transaction }
       );
 
+      await recordPilotEventSilently(
+        {
+          eventName: "tasks_generated",
+          userId,
+          propertyId: normalizedPropertyId,
+          sourceType: "property_task",
+          sourceModel: "PropertyTask",
+          metadata: {
+            createdCount,
+            updatedCount,
+            proposalCount: proposals.length,
+            openTaskCount: openTasks.length,
+          },
+        },
+        { transaction }
+      );
+
       return {
         createdCount,
         updatedCount,
@@ -649,6 +676,33 @@ class PropertyTaskService {
         },
         { transaction }
       );
+
+      const eventNameByStatus = {
+        completed: "task_completed",
+        dismissed: "task_dismissed",
+        not_relevant: "task_not_relevant",
+      };
+
+      if (eventNameByStatus[nextStatus]) {
+        await recordPilotEventSilently(
+          {
+            eventName: eventNameByStatus[nextStatus],
+            userId,
+            propertyId: normalizedPropertyId,
+            sourceType: "property_task",
+            sourceModel: "PropertyTask",
+            sourceId: task.id,
+            metadata: {
+              taskType: task.task_type,
+              priority: task.priority,
+              fromStatus: previousStatus,
+              toStatus: nextStatus,
+              hasDueDate: Boolean(task.due_date),
+            },
+          },
+          { transaction }
+        );
+      }
 
       return toTaskResponse(task);
     });
