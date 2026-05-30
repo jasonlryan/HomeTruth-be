@@ -31,6 +31,8 @@ const PropertyPerson = require("./propertyPerson");
 const PropertyDocument = require("./propertyDocument");
 const EvidenceSource = require("./evidenceSource");
 const PropertyFact = require("./propertyFact");
+const PropertyTask = require("./propertyTask");
+const PropertyTaskStatusEvent = require("./propertyTaskStatusEvent");
 const Partner = require("./partner");
 const PartnerCohort = require("./partnerCohort");
 const CohortMember = require("./cohortMember");
@@ -328,6 +330,70 @@ PropertyFact.belongsTo(User, {
   as: "createdBy",
 });
 
+Property.hasMany(PropertyTask, {
+  foreignKey: "property_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyTask.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
+User.hasMany(PropertyTask, {
+  foreignKey: "assigned_user_id",
+  as: "assignedPropertyTasks",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PropertyTask.belongsTo(User, {
+  foreignKey: "assigned_user_id",
+  as: "assignedUser",
+});
+
+User.hasMany(PropertyTask, {
+  foreignKey: "status_updated_by_user_id",
+  as: "updatedPropertyTasks",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PropertyTask.belongsTo(User, {
+  foreignKey: "status_updated_by_user_id",
+  as: "statusUpdatedBy",
+});
+
+PropertyTask.hasMany(PropertyTaskStatusEvent, {
+  foreignKey: "property_task_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyTaskStatusEvent.belongsTo(PropertyTask, {
+  foreignKey: "property_task_id",
+});
+
+Property.hasMany(PropertyTaskStatusEvent, {
+  foreignKey: "property_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PropertyTaskStatusEvent.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
+User.hasMany(PropertyTaskStatusEvent, {
+  foreignKey: "user_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PropertyTaskStatusEvent.belongsTo(User, {
+  foreignKey: "user_id",
+});
+
 // Partner cohort and consent associations
 Partner.hasMany(PartnerCohort, {
   foreignKey: "partner_id",
@@ -476,6 +542,8 @@ module.exports = {
   PropertyDocument,
   EvidenceSource,
   PropertyFact,
+  PropertyTask,
+  PropertyTaskStatusEvent,
   Partner,
   PartnerCohort,
   CohortMember,
