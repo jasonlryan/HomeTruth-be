@@ -31,6 +31,10 @@ const PropertyPerson = require("./propertyPerson");
 const PropertyDocument = require("./propertyDocument");
 const EvidenceSource = require("./evidenceSource");
 const PropertyFact = require("./propertyFact");
+const Partner = require("./partner");
+const PartnerCohort = require("./partnerCohort");
+const CohortMember = require("./cohortMember");
+const ConsentRecord = require("./consentRecord");
 
 
 
@@ -324,6 +328,97 @@ PropertyFact.belongsTo(User, {
   as: "createdBy",
 });
 
+// Partner cohort and consent associations
+Partner.hasMany(PartnerCohort, {
+  foreignKey: "partner_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+PartnerCohort.belongsTo(Partner, {
+  foreignKey: "partner_id",
+});
+
+PartnerCohort.hasMany(CohortMember, {
+  foreignKey: "partner_cohort_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+
+CohortMember.belongsTo(PartnerCohort, {
+  foreignKey: "partner_cohort_id",
+});
+
+User.hasMany(CohortMember, {
+  foreignKey: "user_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+CohortMember.belongsTo(User, {
+  foreignKey: "user_id",
+});
+
+Property.hasMany(CohortMember, {
+  foreignKey: "property_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+CohortMember.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
+Partner.hasMany(ConsentRecord, {
+  foreignKey: "partner_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+ConsentRecord.belongsTo(Partner, {
+  foreignKey: "partner_id",
+});
+
+PartnerCohort.hasMany(ConsentRecord, {
+  foreignKey: "partner_cohort_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+ConsentRecord.belongsTo(PartnerCohort, {
+  foreignKey: "partner_cohort_id",
+});
+
+CohortMember.hasMany(ConsentRecord, {
+  foreignKey: "cohort_member_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+ConsentRecord.belongsTo(CohortMember, {
+  foreignKey: "cohort_member_id",
+});
+
+User.hasMany(ConsentRecord, {
+  foreignKey: "user_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+ConsentRecord.belongsTo(User, {
+  foreignKey: "user_id",
+});
+
+Property.hasMany(ConsentRecord, {
+  foreignKey: "property_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+ConsentRecord.belongsTo(Property, {
+  foreignKey: "property_id",
+});
+
 const runSeeders = async () => {
   try {
     const { seedQuizQuestions } = require("../Seeders/seedQuizQuestions");
@@ -381,4 +476,8 @@ module.exports = {
   PropertyDocument,
   EvidenceSource,
   PropertyFact,
+  Partner,
+  PartnerCohort,
+  CohortMember,
+  ConsentRecord,
 };
