@@ -52,6 +52,7 @@ const privacySettings = require("./routes/setting/privacySettings");
 const documentRoutes = require("./routes/documentRoutes");
 const userDocumentRoutes = require("./routes/userDocumentRoutes");
 const waitlistRoute = require("./routes/waitlistRoute");
+const propertyRecordRoutes = require("./routes/propertyRecordRoutes");
 // const zoopla = require("./routes/zoppla/zoopla");
 const propertyRoutes = require('./routes/zoppla/properties');
 const adminDashboardRoutes = require('./routes/admin/adminDashboardRoutes');
@@ -77,6 +78,7 @@ app.use("/api/privacy-settings", privacySettings);
 app.use("/api/documents", documentRoutes);
 app.use("/api/user-documents", userDocumentRoutes);
 app.use("/api/waitlist", waitlistRoute);
+app.use('/api/property-records', propertyRecordRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/admin/users', adminDataRoutes);
@@ -161,4 +163,3 @@ if (useSSL) {
     await initializeRAGSystem();
   });
 }
-
