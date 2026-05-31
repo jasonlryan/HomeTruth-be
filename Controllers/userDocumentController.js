@@ -130,7 +130,13 @@ class UserDocumentController {
                             filename: file.originalname,
                             doc_type: analysis.doc_type,
                             category: analysis.category,
-                            tags: analysis.tags
+                            tags: analysis.tags,
+                            ...(normalizedPropertyId
+                                ? {
+                                    property_id: normalizedPropertyId,
+                                    property_ids: [normalizedPropertyId]
+                                }
+                                : {})
                         }
                     );
 
