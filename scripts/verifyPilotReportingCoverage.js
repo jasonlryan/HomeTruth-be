@@ -43,7 +43,9 @@ require.cache[modelsPath] = {
       count: async ({ where }) => {
         if (where.property_id) return 2;
         if (where.membership_status) {
-          return where.membership_status[Symbol.for("placeholder")] ? 0 : 3;
+          const statuses = Object.getOwnPropertySymbols(where.membership_status)
+            .flatMap((symbol) => where.membership_status[symbol]);
+          return statuses.includes("onboarded") ? 4 : 3;
         }
         return 5;
       },
@@ -88,6 +90,8 @@ const PilotAnalyticsService = require("../services/pilotAnalyticsService");
   const { metrics, metricCoverage } = report.reports[0];
 
   assert.equal(metrics.activationRate, 60);
+  assert.equal(metrics.onboardedMembers, 4);
+  assert.equal(metrics.activeMembers, 3);
   assert.equal(metrics.propertySetupCompletionRate, 67);
   assert.equal(metrics.consentRate, 100);
   assert.equal(metrics.documentLinksPerActivatedMember, 1.3);
