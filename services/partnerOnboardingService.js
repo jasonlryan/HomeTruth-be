@@ -550,6 +550,10 @@ class PartnerOnboardingService {
 
     return event;
   }
+
+  static async recordDailyActivity(userId) {
+    return PilotAnalyticsService.recordDailyActivity(userId);
+  }
 }
 
 PartnerOnboardingService.PartnerOnboardingError = PartnerOnboardingError;
