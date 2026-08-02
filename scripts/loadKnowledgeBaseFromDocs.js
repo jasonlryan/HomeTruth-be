@@ -17,7 +17,16 @@ let VectorStore;
 
 const DEFAULT_DOCS_DIR = path.resolve(__dirname, '../../hometruth DOCS');
 const docsDir = path.resolve(process.argv[2] || DEFAULT_DOCS_DIR);
-const BATCH_SIZE = Number(process.env.KB_EMBED_BATCH_SIZE || 64);
+
+function parseBatchSize(value) {
+  const parsed = Number.parseInt(value || '64', 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error('KB_EMBED_BATCH_SIZE must be a positive integer.');
+  }
+  return parsed;
+}
+
+const BATCH_SIZE = parseBatchSize(process.env.KB_EMBED_BATCH_SIZE);
 
 function assertEmbeddingKey() {
   const key = env.ai?.OpenAIKey;
