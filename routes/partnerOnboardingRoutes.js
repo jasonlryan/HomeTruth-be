@@ -12,5 +12,6 @@ router.use(authMiddleware);
 router.post("/claim", PartnerOnboardingController.claimInvite);
 router.post("/consents", PartnerOnboardingController.recordConsents);
 router.post("/property", PartnerOnboardingController.attachProperty);
+router.post("/activity", PartnerOnboardingController.recordDailyActivity);
 
 module.exports = router;

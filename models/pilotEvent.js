@@ -101,6 +101,10 @@ const PilotEvent = sequelize.define(
       type: DataTypes.JSON,
       allowNull: true,
     },
+    activity_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
     occurred_at: {
       type: DataTypes.DATE,
       allowNull: false,

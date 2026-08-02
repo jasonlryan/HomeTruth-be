@@ -1,4 +1,4 @@
-const { Op, fn, col } = require("sequelize");
+const { Op, fn, col, where: sequelizeWhere } = require("sequelize");
 const {
   CohortMember,
   ConsentRecord,
@@ -25,6 +25,7 @@ const EVENT_CATEGORY_BY_NAME = {
   task_dismissed: "task",
   task_not_relevant: "task",
   property_chat_question: "system",
+  pilot_daily_activity: "system",
   user_feedback_submitted: "feedback",
 };
 
@@ -95,6 +96,7 @@ const toEventResponse = (event) => ({
   partnerContextAllowed: event.partner_context_allowed,
   metadata: event.metadata,
   occurredAt: event.occurred_at,
+  activityDate: event.activity_date,
   createdAt: event.createdAt,
 });
 
@@ -291,6 +293,27 @@ const countDistinctParticipants = async (where) =>
     col: "cohort_member_id",
   });
 
+const countRepeatActiveMembers = async (where) => {
+  const rows = await PilotEvent.findAll({
+    attributes: ["cohort_member_id"],
+    where: {
+      ...where,
+      event_name: "pilot_daily_activity",
+      activity_date: { [Op.ne]: null },
+    },
+    group: ["cohort_member_id"],
+    having: sequelizeWhere(
+      fn("COUNT", fn("DISTINCT", col("activity_date"))),
+      { [Op.gte]: 2 }
+    ),
+    raw: true,
+  });
+
+  return rows.length;
+};
+
+const utcActivityDate = (date = new Date()) => date.toISOString().slice(0, 10);
+
 const pct = (numerator, denominator) => {
   if (!denominator) return 0;
   return Math.round((numerator / denominator) * 100);
@@ -388,6 +411,7 @@ class PilotAnalyticsService {
         consent_scope: context.consentScope,
         partner_context_allowed: context.partnerContextAllowed,
         metadata: sanitizeMetadata(payload.metadata),
+        activity_date: payload.activityDate || payload.activity_date || null,
         occurred_at: payload.occurredAt || payload.occurred_at || new Date(),
       },
       { transaction: options.transaction }
@@ -416,6 +440,66 @@ class PilotAnalyticsService {
         commentLength: comment.length,
       },
     });
+  }
+
+  static async recordDailyActivity(userId, options = {}) {
+    const normalizedUserId = toIntegerOrNull(userId);
+    if (!normalizedUserId) {
+      throw new PilotAnalyticsError("Authenticated user is required", 401);
+    }
+
+    const context = await resolveContext(
+      { eventName: "pilot_daily_activity", userId: normalizedUserId },
+      options
+    );
+    if (!context.partnerContextAllowed || !context.cohortMemberId) {
+      return { recorded: false, reason: "no_eligible_cohort" };
+    }
+
+    const activityDate = utcActivityDate();
+    const eventWhere = {
+      event_name: "pilot_daily_activity",
+      partner_cohort_id: context.partnerCohortId,
+      cohort_member_id: context.cohortMemberId,
+      user_id: normalizedUserId,
+      activity_date: activityDate,
+    };
+    const existing = await PilotEvent.findOne({
+      where: eventWhere,
+      transaction: options.transaction,
+    });
+    if (existing) {
+      return { recorded: false, deduplicated: true, event: toEventResponse(existing) };
+    }
+
+    try {
+      const event = await this.recordEvent(
+        {
+          eventName: "pilot_daily_activity",
+          userId: normalizedUserId,
+          partnerContextAllowed: true,
+          partnerId: context.partnerId,
+          partnerCohortId: context.partnerCohortId,
+          cohortMemberId: context.cohortMemberId,
+          consentScope: AGGREGATE_SCOPE,
+          sourceType: "system",
+          sourceModel: "PilotActivity",
+          activityDate,
+          metadata: {},
+        },
+        options
+      );
+      return { recorded: true, deduplicated: false, event };
+    } catch (error) {
+      if (error.name !== "SequelizeUniqueConstraintError") throw error;
+
+      const duplicate = await PilotEvent.findOne({
+        where: eventWhere,
+        transaction: options.transaction,
+      });
+      if (!duplicate) throw error;
+      return { recorded: false, deduplicated: true, event: toEventResponse(duplicate) };
+    }
   }
 
   static async getCohortReport(filters = {}) {
@@ -452,6 +536,7 @@ class PilotAnalyticsService {
         tasksGeneratedMembers,
         taskActionedMembers,
         propertyChatQuestionedMembers,
+        repeatActiveMembers,
       ] = await Promise.all([
         PilotEvent.count({ where: scopedEventWhere }),
         countDistinctParticipants({
@@ -484,6 +569,7 @@ class PilotAnalyticsService {
           ...scopedEventWhere,
           event_name: "property_chat_question",
         }),
+        countRepeatActiveMembers(scopedEventWhere),
       ]);
 
       const [
@@ -568,7 +654,7 @@ class PilotAnalyticsService {
         tasksGeneratedMembers,
         taskActionedMembers,
         propertyChatQuestionedMembers,
-        repeatActiveMembers: null,
+        repeatActiveMembers,
       };
 
       metrics.activationRate = pct(metrics.signupCompletedMembers, invitedMembers);
@@ -597,6 +683,10 @@ class PilotAnalyticsService {
       );
       metrics.propertyChatUsageRate = pct(
         metrics.propertyChatQuestionedMembers,
+        metrics.signupCompletedMembers
+      );
+      metrics.repeatUseRate = pct(
+        metrics.repeatActiveMembers,
         metrics.signupCompletedMembers
       );
 
@@ -641,7 +731,7 @@ class PilotAnalyticsService {
           taskGeneration: "measured",
           taskActionEngagement: "measured",
           propertyAwareChatUsage: "measured",
-          repeatUse: "not_instrumented",
+          repeatUse: "measured",
           feedbackRating: "measured",
         },
         dropOff,

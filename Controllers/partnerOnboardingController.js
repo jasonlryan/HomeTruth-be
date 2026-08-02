@@ -92,6 +92,19 @@ class PartnerOnboardingController {
       return handleError(res, error);
     }
   }
+
+  static async recordDailyActivity(req, res) {
+    try {
+      const { recorded, deduplicated } =
+        await PartnerOnboardingService.recordDailyActivity(req.user.id);
+      return res.status(202).json({
+        success: true,
+        data: { recorded, deduplicated: Boolean(deduplicated) },
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  }
 }
 
 module.exports = PartnerOnboardingController;

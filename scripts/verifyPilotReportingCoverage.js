@@ -13,6 +13,14 @@ const countByEvent = {
   tasks_generated: 2,
   property_chat_question: 1,
 };
+const dailyEvents = [];
+const pilotMember = {
+  id: 12,
+  PartnerCohort: {
+    id: 7,
+    Partner: { id: 4 },
+  },
+};
 
 const originalModels = require.cache[modelsPath];
 require.cache[modelsPath] = {
@@ -49,11 +57,18 @@ require.cache[modelsPath] = {
         }
         return 5;
       },
+      findOne: async () => pilotMember,
     },
-    ConsentRecord: { count: async () => 3 },
+    ConsentRecord: {
+      count: async () => 3,
+      findOne: async () => ({ id: 1 }),
+    },
     Partner: {},
     PilotEvent: {
       findAll: async ({ where, group }) => {
+        if (group && where.event_name === "pilot_daily_activity") {
+          return [{ cohort_member_id: 12 }, { cohort_member_id: 13 }];
+        }
         if (group) {
           return [
             { event_name: "invite_viewed", count: "5" },
@@ -73,6 +88,24 @@ require.cache[modelsPath] = {
         }
         return [];
       },
+      findOne: async ({ where }) =>
+        dailyEvents.find(
+          (event) =>
+            event.event_name === where.event_name &&
+            event.partner_cohort_id === where.partner_cohort_id &&
+            event.cohort_member_id === where.cohort_member_id &&
+            event.user_id === where.user_id &&
+            event.activity_date === where.activity_date
+        ) || null,
+      create: async (payload) => {
+        const event = {
+          id: dailyEvents.length + 1,
+          ...payload,
+          createdAt: new Date(),
+        };
+        dailyEvents.push(event);
+        return event;
+      },
       count: async ({ where, distinct }) => {
         if (!distinct) return 23;
         if (typeof where.event_name === "string") return countByEvent[where.event_name] || 0;
@@ -86,6 +119,15 @@ delete require.cache[servicePath];
 const PilotAnalyticsService = require("../services/pilotAnalyticsService");
 
 (async () => {
+  const firstDailyActivity = await PilotAnalyticsService.recordDailyActivity(101);
+  const duplicateDailyActivity = await PilotAnalyticsService.recordDailyActivity(101);
+  assert.equal(firstDailyActivity.recorded, true);
+  assert.equal(duplicateDailyActivity.recorded, false);
+  assert.equal(duplicateDailyActivity.deduplicated, true);
+  assert.equal(dailyEvents.length, 1);
+  assert.deepEqual(dailyEvents[0].metadata, {});
+  assert.match(dailyEvents[0].activity_date, /^\d{4}-\d{2}-\d{2}$/);
+
   const report = await PilotAnalyticsService.getCohortReport({ period: "all" });
   const { metrics, metricCoverage } = report.reports[0];
 
@@ -98,8 +140,9 @@ const PilotAnalyticsService = require("../services/pilotAnalyticsService");
   assert.equal(metrics.taskActionedMembers, 2);
   assert.equal(metrics.propertyChatQuestionedMembers, 1);
   assert.equal(metrics.propertyChatUsageRate, 33);
-  assert.equal(metrics.repeatActiveMembers, null);
-  assert.equal(metricCoverage.repeatUse, "not_instrumented");
+  assert.equal(metrics.repeatActiveMembers, 2);
+  assert.equal(metrics.repeatUseRate, 67);
+  assert.equal(metricCoverage.repeatUse, "measured");
   assert.equal(metricCoverage.propertyAwareChatUsage, "measured");
   assert.deepEqual(report.reports[0].dropOff, {
     inviteToSignup: 2,
@@ -126,6 +169,25 @@ const PilotAnalyticsService = require("../services/pilotAnalyticsService");
   );
   assert.match(chatController, /eventName: "property_chat_question"/);
   assert.equal(chatController.includes("metadata: {\n            userMessage"), false);
+
+  const pilotRoutes = fs.readFileSync(
+    path.join(root, "routes/partnerOnboardingRoutes.js"),
+    "utf8"
+  );
+  assert.ok(
+    pilotRoutes.indexOf("router.use(authMiddleware)") <
+      pilotRoutes.indexOf('router.post("/activity"'),
+    "daily activity route must be authenticated"
+  );
+
+  const onboardingController = fs.readFileSync(
+    path.join(root, "controllers/partnerOnboardingController.js"),
+    "utf8"
+  );
+  assert.match(
+    onboardingController,
+    /data: \{ recorded, deduplicated: Boolean\(deduplicated\) \}/
+  );
 
   console.log("Pilot reporting coverage checks passed");
 })()
