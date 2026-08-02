@@ -179,6 +179,11 @@ const basePayload = (partnerType, sequence) => ({
     900
   );
   assert.equal(first.entitlement.seats, 750);
+  const updateEvent = first.auditEvents.find((event) => event.eventType === "updated");
+  assert.deepEqual(updateEvent.changes.entitlement, {
+    previous: { pack: "shared_core", seats: 500 },
+    next: { pack: "shared_core", seats: 750 },
+  });
 
   first = await PartnerProgrammeService.transitionProgramme(firstId, "closed", 900);
   assert.equal(first.status, "closed");

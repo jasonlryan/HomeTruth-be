@@ -124,7 +124,7 @@ const recordPilotEventSilently = async (payload) => {
   }
 };
 
-const validateCohortState = (partner, cohort) => {
+const validateCohortState = (partner, cohort, inviteMode = null) => {
   if (!partner || partner.status !== "active") {
     return {
       status: "ineligible",
@@ -137,6 +137,20 @@ const validateCohortState = (partner, cohort) => {
       status: "ineligible",
       message: "This partner programme is not currently accepting onboarding.",
     };
+  }
+
+  if (cohort.PartnerProgramme && inviteMode) {
+    const configuredMode = cohort.PartnerProgramme.invite_mode;
+    const modeAllowed =
+      configuredMode === "both" ||
+      (configuredMode === "cohort_code" && inviteMode === "cohort_code") ||
+      (configuredMode === "individual_invite" && inviteMode === "individual_invite");
+    if (!modeAllowed) {
+      return {
+        status: "ineligible",
+        message: "This invite route is not enabled for the partner programme.",
+      };
+    }
   }
 
   if (cohort.PartnerCampaign && cohort.PartnerCampaign.status !== "active") {
@@ -164,7 +178,7 @@ const validateCohortState = (partner, cohort) => {
 };
 
 const buildInviteResponse = ({ code, mode, partner, cohort, member = null }) => {
-  const blocked = validateCohortState(partner, cohort);
+  const blocked = validateCohortState(partner, cohort, mode);
   if (blocked) {
     return {
       invite: {
@@ -322,7 +336,8 @@ class PartnerOnboardingService {
     if (existingMember) {
       const blocked = validateCohortState(
         existingMember.PartnerCohort.Partner,
-        existingMember.PartnerCohort
+        existingMember.PartnerCohort,
+        "individual_invite"
       );
       if (blocked) {
         throw new PartnerOnboardingError(

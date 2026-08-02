@@ -8,7 +8,9 @@ const handleError = (res, error) => {
     success: false,
     message: isDuplicate
       ? "A partner programme, campaign or cohort already uses that key"
-      : error.message || "Partner programme request failed",
+      : statusCode >= 500
+        ? "Partner programme request failed"
+        : error.message || "Partner programme request failed",
   });
 };
 

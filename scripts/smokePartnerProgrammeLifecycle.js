@@ -58,8 +58,10 @@ const payloadFor = (partnerType, index) => ({
   ];
   const programmes = [];
   for (const [index, partnerType] of partnerTypes.entries()) {
+    const payload = payloadFor(partnerType, index + 1);
+    if (partnerType === "mortgage_provider") payload.inviteMode = "individual_invite";
     const programme = await PartnerProgrammeService.createProgramme(
-      payloadFor(partnerType, index + 1),
+      payload,
       actor.id
     );
     partnerIds.push(programme.partner.id);
@@ -91,6 +93,18 @@ const payloadFor = (partnerType, index) => ({
   assert.equal(transitioned.status, "paused");
   invite = await PartnerOnboardingService.validateInvite(first.cohorts[0].cohortKey);
   assert.equal(invite.invite.status, "ineligible");
+
+  const individualInviteProgramme = programmes[1];
+  await PartnerProgrammeService.transitionProgramme(
+    individualInviteProgramme.id,
+    "active",
+    actor.id
+  );
+  invite = await PartnerOnboardingService.validateInvite(
+    individualInviteProgramme.cohorts[0].cohortKey
+  );
+  assert.equal(invite.invite.status, "ineligible");
+  assert.match(invite.invite.message, /invite route is not enabled/);
 
   const response = JSON.stringify(await PartnerProgrammeService.getProgramme(first.id));
   for (const prohibitedCollection of [

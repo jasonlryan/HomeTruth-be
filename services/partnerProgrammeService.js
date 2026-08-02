@@ -445,8 +445,19 @@ class PartnerProgrammeService {
       };
       const normalized = buildProgrammeInput({ ...current, ...payload }, actorId);
       await assertAdminOwner(normalized.owner_user_id, transaction);
+      const next = {
+        name: normalized.name,
+        ownerUserId: normalized.owner_user_id,
+        startDate: normalized.start_date,
+        endDate: normalized.end_date,
+        entitlement: normalized.entitlement,
+        inviteMode: normalized.invite_mode,
+        approvedContentRefs: normalized.approved_content_refs,
+      };
       const changes = {};
-      for (const key of requestedKeys) changes[key] = payload[key];
+      for (const key of requestedKeys) {
+        changes[key] = { previous: current[key] ?? null, next: next[key] ?? null };
+      }
       await programme.update(
         { ...normalized, updated_by_user_id: actorId },
         { transaction }
