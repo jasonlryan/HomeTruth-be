@@ -5,6 +5,7 @@ const env = require('../../config/env');
 const VectorStore = require('../../services/vectorStore');
 const UnifiedRetrievalService = require('../../services/unifiedRetrievalService');
 const WebSearchService = require('../../services/webSearchService');
+const PilotAnalyticsService = require('../../services/pilotAnalyticsService');
 
 const openai = new OpenAI({ 
   apiKey:  env.ai.OpenAIKey
@@ -308,6 +309,23 @@ const chatController = {
         assistantReply,
         is_saved: is_saved
       });
+
+      if (selectedPropertyId) {
+        PilotAnalyticsService.recordEvent({
+          eventName: "property_chat_question",
+          userId: user_id,
+          propertyId: selectedPropertyId,
+          sourceType: "system",
+          sourceModel: "ChatHistory",
+          sourceId: savedChat.id,
+          metadata: {
+            hasPropertyContext: true,
+            isFollowUp: Boolean(conversation_id),
+          },
+        }).catch((analyticsError) => {
+          console.error("Pilot event capture failed:", analyticsError.message);
+        });
+      }
   
       // Calculate message counts without redundant queries (use data we already have)
       const totalMessages = messageCount + 1;

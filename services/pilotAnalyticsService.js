@@ -24,6 +24,7 @@ const EVENT_CATEGORY_BY_NAME = {
   task_completed: "task",
   task_dismissed: "task",
   task_not_relevant: "task",
+  property_chat_question: "system",
   user_feedback_submitted: "feedback",
 };
 
@@ -283,6 +284,13 @@ const countEvents = async (where) => {
   }, {});
 };
 
+const countDistinctParticipants = async (where) =>
+  PilotEvent.count({
+    where,
+    distinct: true,
+    col: "cohort_member_id",
+  });
+
 const pct = (numerator, denominator) => {
   if (!denominator) return 0;
   return Math.round((numerator / denominator) * 100);
@@ -435,7 +443,48 @@ class PilotAnalyticsService {
         partner_cohort_id: cohort.id,
       };
       const eventCounts = await countEvents(scopedEventWhere);
-      const totalEvents = await PilotEvent.count({ where: scopedEventWhere });
+      const [
+        totalEvents,
+        signupCompletedMembers,
+        consentRecordedMembers,
+        propertySetupCompletedMembers,
+        documentLinkedMembers,
+        tasksGeneratedMembers,
+        taskActionedMembers,
+        propertyChatQuestionedMembers,
+      ] = await Promise.all([
+        PilotEvent.count({ where: scopedEventWhere }),
+        countDistinctParticipants({
+          ...scopedEventWhere,
+          event_name: "signup_completed",
+        }),
+        countDistinctParticipants({
+          ...scopedEventWhere,
+          event_name: "consent_recorded",
+        }),
+        countDistinctParticipants({
+          ...scopedEventWhere,
+          event_name: "property_setup_completed",
+        }),
+        countDistinctParticipants({
+          ...scopedEventWhere,
+          event_name: "document_linked",
+        }),
+        countDistinctParticipants({
+          ...scopedEventWhere,
+          event_name: "tasks_generated",
+        }),
+        countDistinctParticipants({
+          ...scopedEventWhere,
+          event_name: {
+            [Op.in]: ["task_completed", "task_dismissed", "task_not_relevant"],
+          },
+        }),
+        countDistinctParticipants({
+          ...scopedEventWhere,
+          event_name: "property_chat_question",
+        }),
+      ]);
 
       const [
         invitedMembers,
@@ -512,28 +561,58 @@ class PilotAnalyticsService {
         taskNotRelevant: eventCounts.task_not_relevant || 0,
         feedbackSubmitted: eventCounts.user_feedback_submitted || 0,
         averageFeedbackRating,
+        signupCompletedMembers,
+        consentRecordedMembers,
+        propertySetupCompletedMembers,
+        documentLinkedMembers,
+        tasksGeneratedMembers,
+        taskActionedMembers,
+        propertyChatQuestionedMembers,
+        repeatActiveMembers: null,
       };
 
-      metrics.activationRate = pct(metrics.propertySetupCompleted, invitedMembers);
-      metrics.consentRate = pct(metrics.consentRecorded, invitedMembers);
+      metrics.activationRate = pct(metrics.signupCompletedMembers, invitedMembers);
+      metrics.propertySetupCompletionRate = pct(
+        metrics.propertySetupCompletedMembers,
+        metrics.signupCompletedMembers
+      );
+      metrics.consentRate = pct(
+        metrics.consentRecordedMembers,
+        metrics.signupCompletedMembers
+      );
+      metrics.documentLinksPerActivatedMember = metrics.signupCompletedMembers
+        ? Number(
+            (
+              metrics.documentLinked / metrics.signupCompletedMembers
+            ).toFixed(1)
+          )
+        : 0;
       metrics.taskCompletionRate = pct(
         metrics.taskCompleted,
         metrics.taskCompleted + metrics.taskDismissed + metrics.taskNotRelevant
       );
+      metrics.taskActionEngagementRate = pct(
+        metrics.taskActionedMembers,
+        metrics.signupCompletedMembers
+      );
+      metrics.propertyChatUsageRate = pct(
+        metrics.propertyChatQuestionedMembers,
+        metrics.signupCompletedMembers
+      );
 
       const dropOff = {
-        inviteToSignup: Math.max(0, metrics.inviteViewed - metrics.signupCompleted),
+        inviteToSignup: Math.max(0, invitedMembers - metrics.signupCompletedMembers),
         signupToConsent: Math.max(
           0,
-          metrics.signupCompleted - metrics.consentRecorded
+          metrics.signupCompletedMembers - metrics.consentRecordedMembers
         ),
         consentToProperty: Math.max(
           0,
-          metrics.consentRecorded - metrics.propertySetupCompleted
+          metrics.consentRecordedMembers - metrics.propertySetupCompletedMembers
         ),
         propertyToDocument: Math.max(
           0,
-          metrics.propertySetupCompleted - metrics.documentLinked
+          metrics.propertySetupCompletedMembers - metrics.documentLinkedMembers
         ),
       };
 
@@ -555,6 +634,16 @@ class PilotAnalyticsService {
         },
         metrics,
         eventCounts,
+        metricCoverage: {
+          inviteToSignupActivation: "measured",
+          propertySetupCompletion: "measured",
+          documentsLinkedPerActivatedMember: "measured",
+          taskGeneration: "measured",
+          taskActionEngagement: "measured",
+          propertyAwareChatUsage: "measured",
+          repeatUse: "not_instrumented",
+          feedbackRating: "measured",
+        },
         dropOff,
         readiness: buildReadiness(cohort, metrics),
       });
