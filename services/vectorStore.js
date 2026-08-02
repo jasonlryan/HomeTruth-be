@@ -37,10 +37,26 @@ class VectorStore {
     }
   }
 
-  static async searchSimilarChunks(query, limit = 5, scoreThreshold = 0.7) {
+  static formatSimilarChunkResults(searchResult) {
+    return searchResult.map(result => ({
+      id: result.id,
+      text: result.payload.text,
+      score: result.score,
+      metadata: {
+        filename: result.payload.filename,
+        document_id: result.payload.document_id,
+        chunk_index: result.payload.chunk_index,
+        upload_date: result.payload.upload_date,
+        title: result.payload.title,
+        category: result.payload.category,
+        tags: result.payload.tags,
+        source: result.payload.source
+      }
+    }));
+  }
+
+  static async searchSimilarChunksByEmbedding(queryEmbedding, limit = 5, scoreThreshold = 0.7) {
     try {
-      const queryEmbedding = await OpenAIEmbeddingService.generateEmbedding(query);
-      
       const searchResult = await qdrantClient.search(COLLECTION_NAME, {
         vector: queryEmbedding,
         limit: limit,
@@ -48,21 +64,17 @@ class VectorStore {
         score_threshold: scoreThreshold
       });
 
-      return searchResult.map(result => ({
-        id: result.id,
-        text: result.payload.text,
-        score: result.score,
-        metadata: {
-          filename: result.payload.filename,
-          document_id: result.payload.document_id,
-          chunk_index: result.payload.chunk_index,
-          upload_date: result.payload.upload_date,
-          title: result.payload.title,
-          category: result.payload.category,
-          tags: result.payload.tags,
-          source: result.payload.source
-        }
-      }));
+      return this.formatSimilarChunkResults(searchResult);
+    } catch (error) {
+      console.error('❌ Error searching similar chunks:', error);
+      throw error;
+    }
+  }
+
+  static async searchSimilarChunks(query, limit = 5, scoreThreshold = 0.7) {
+    try {
+      const queryEmbedding = await OpenAIEmbeddingService.generateEmbedding(query);
+      return this.searchSimilarChunksByEmbedding(queryEmbedding, limit, scoreThreshold);
     } catch (error) {
       console.error('❌ Error searching similar chunks:', error);
       throw error;

@@ -3,6 +3,7 @@ const { ChatHistory, User, GuestChatSession } = require('../../models/index');
 const { Op } = require('sequelize');
 const env = require('../../config/env');
 const VectorStore = require('../../services/vectorStore');
+const UnifiedRetrievalService = require('../../services/unifiedRetrievalService');
 const WebSearchService = require('../../services/webSearchService');
 
 const openai = new OpenAI({ 
@@ -14,7 +15,8 @@ const systemMessage = {
   content: `You are HomeTruth, an expert AI assistant helping UK homebuyers make informed, risk-aware decisions in the UK property market.
 
 Operating principles (RAG-first):
-- Only rely on the provided Sources section. Treat it as authoritative context retrieved via Pinecone. If key facts are missing, say so and request the needed info.
+- Only rely on the provided Sources section. Treat it as authoritative HomeTruth context retrieved from labelled source classes. If key facts are missing, say so and request the needed info.
+- Source classes may include uploaded user documents, property record context, HomeTruth guidance, and external/web sources. Keep those classes distinct in your reasoning.
 - Use the provided sources to inform your answers but don't include citation numbers in your response.
 - If no relevant sources are provided, state that you lack evidence and propose concrete next steps to find it.
 - Never invent sources, links, figures, legal or financial guarantees.
@@ -95,7 +97,15 @@ const chatController = {
   async handleChat(req, res) {
     try {
       const user_id = req.user?.id;
-      const { userMessage, conversation_id, is_saved = false, search_web = false } = req.body;
+      const {
+        userMessage,
+        conversation_id,
+        is_saved = false,
+        search_web = false,
+        propertyId,
+        property_id
+      } = req.body;
+      const selectedPropertyId = propertyId || property_id || null;
   
       // Validate required fields
       if (!user_id || !userMessage || typeof userMessage !== 'string') {
@@ -186,11 +196,28 @@ const chatController = {
         }
       }
   
-      // Parallelize RAG search, web search, and saved count fetch (if needed) for better performance
+      // Parallelize unified retrieval, web search, and saved count fetch (if needed) for better performance
       const parallelTasks = [
-        VectorStore.searchSimilarChunks(userMessage, 5, 0.7).catch(err => {
-          console.error('Error searching for relevant context:', err);
-          return [];
+        UnifiedRetrievalService.assembleAssistantContext({
+          query: userMessage,
+          userId: user_id,
+          propertyId: selectedPropertyId
+        }).catch(err => {
+          if (err.name === 'UnifiedRetrievalAccessError') {
+            throw err;
+          }
+          console.error('Error assembling unified retrieval context:', err);
+          return UnifiedRetrievalService.emptyContext(
+            userMessage,
+            {
+              userId: parseInt(user_id),
+              propertyId: selectedPropertyId || null,
+              userDocumentScope: selectedPropertyId
+                ? 'selected_property_documents'
+                : 'all_current_user_documents'
+            },
+            [err.message]
+          );
         }),
         search_web === true ? WebSearchService.searchWeb(userMessage, 5).catch(err => {
           console.error('Error performing web search:', err);
@@ -213,7 +240,7 @@ const chatController = {
       }
       
       const results = await Promise.all(parallelTasks);
-      const similarChunksResult = results[0];
+      const retrievalContext = results[0];
       const webSearchResultsResult = results[1];
       
       // Update saved count if we fetched it
@@ -221,83 +248,26 @@ const chatController = {
         savedConversationsCount = results[2];
       }
   
-      // Process RAG search results
-      let documentChunks = [];
-      let sourcesList = [];
-      const similarChunks = similarChunksResult;
-      if (similarChunks.length > 0) {
-        // Format document chunks with citations
-        documentChunks = similarChunks.map((chunk, index) => {
-          const sourceNumber = index + 1;
-          const filename = chunk.metadata.filename || 'Unknown document';
-          const url = chunk.metadata.url || '';
-          
-          // Add to sources list
-          sourcesList.push({
-            number: sourceNumber,
-            title: filename,
-            url: url,
-            type: 'document'
-          });
-          
-          return `[${sourceNumber}] ${chunk.text}`;
-        });
-      }
-  
-      // Process web search results
       let webSearchResults = webSearchResultsResult;
-      if (search_web === true && webSearchResults.hasResults && webSearchResults.content) {
-        // Add web search results to sources list with offset numbering
-        const webSourcesOffset = sourcesList.length;
-        webSearchResults.sources.forEach((webSource, index) => {
-          sourcesList.push({
-            number: webSourcesOffset + index + 1,
-            title: webSource.title,
-            url: webSource.url,
-            type: 'web'
-          });
-        });
-      }
 
-      // Build combined context with all sources (RAG + Web Search)
-      let relevantContext = '';
-      if (documentChunks.length > 0 || (webSearchResults.hasResults && webSearchResults.content)) {
-        // Add document chunks if available
-        if (documentChunks.length > 0) {
-          relevantContext = documentChunks.join('\n\n');
-        }
-        
-        // Add web search content if available
-        if (webSearchResults.hasResults && webSearchResults.content) {
-          const webSourcesOffset = sourcesList.filter(s => s.type === 'document').length;
-          
-          // Add web search content with proper citation numbering
-          const webContentWithCitations = webSearchResults.content
-            .split('\n\n')
-            .map((piece, index) => {
-              const sourceNumber = webSourcesOffset + index + 1;
-              return piece.replace(/^\[\d+\]/, `[${sourceNumber}]`);
-            })
-            .join('\n\n');
-          
-          if (relevantContext) {
-            relevantContext += '\n\n**Web Search Results:**\n' + webContentWithCitations;
-          } else {
-            relevantContext = '**Web Search Results:**\n' + webContentWithCitations;
-          }
-        }
-        
-        // Add unified sources section at the end
-        if (sourcesList.length > 0) {
-          relevantContext += '\n\n**Sources:**\n';
-          sourcesList.forEach(source => {
-            relevantContext += `[${source.number}] ${source.title}`;
-            if (source.url) {
-              relevantContext += ` — ${source.url}`;
-            }
-            relevantContext += '\n';
-          });
-        }
+      // Build combined context with all sources (unified retrieval + optional web search)
+      let relevantContext = retrievalContext.contextText || '';
+      if (webSearchResults.hasResults && webSearchResults.content) {
+        const webSources = (webSearchResults.sources || [])
+          .map((source, index) => {
+            const title = source.title || `Web source ${index + 1}`;
+            return `${index + 1}. ${title}${source.url ? ` - ${source.url}` : ''}`;
+          })
+          .join('\n');
+        const webContext = [
+          '**External/web source context:**',
+          webSearchResults.content,
+          webSources ? `**External/web sources:**\n${webSources}` : null
+        ].filter(Boolean).join('\n\n');
+
+        relevantContext = relevantContext
+          ? `${relevantContext}\n\n${webContext}`
+          : webContext;
       }
 
       // Create messages array with system message, history, and current message
@@ -319,7 +289,7 @@ const chatController = {
         // Use OpenAI directly - faster and more reliable
         const response = await openai.chat.completions.create({
           model: 'gpt-4o-mini', // Faster than gpt-4, still excellent quality
-          messages: [systemMessage, ...conversationHistory, { role: 'user', content: userMessageWithContext }],
+          messages,
           temperature: 0.7,
           max_tokens: 1000
         });
@@ -383,12 +353,23 @@ const chatController = {
           ragContext: {
             hasContext: relevantContext.length > 0,
             contextLength: relevantContext.length,
-            sourcesUsed: relevantContext.length > 0 ? 'User documents' : 'General knowledge'
+            sourceClasses: [
+              ...(retrievalContext.sourceSummary.sourceClasses || []),
+              ...(webSearchResults.hasResults ? ['external_web_source'] : [])
+            ],
+            counts: {
+              uploadedUserDocuments: retrievalContext.sourceSummary.uploadedUserDocuments,
+              propertyRecords: retrievalContext.sourceSummary.propertyRecords,
+              homeTruthGuidance: retrievalContext.sourceSummary.homeTruthGuidance,
+              webSources: webSearchResults.sources?.length || 0
+            },
+            scope: retrievalContext.scope,
+            errors: retrievalContext.sourceSummary.errors
           },
           webSearch: {
             performed: search_web === true,
             hasResults: webSearchResults.hasResults,
-            sourcesCount: webSearchResults.sources.length,
+            sourcesCount: webSearchResults.sources?.length || 0,
             error: webSearchResults.error || null
           }
         }
@@ -402,6 +383,13 @@ const chatController = {
           success: false,
           message: 'Invalid user reference',
           error: 'The specified user does not exist'
+        });
+      }
+
+      if (error.name === 'UnifiedRetrievalAccessError') {
+        return res.status(error.statusCode || 400).json({
+          success: false,
+          message: error.message
         });
       }
   

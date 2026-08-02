@@ -5,6 +5,113 @@ const TextSplitter = require('../utils/textSplitter');
 const env = require('../config/env');
 
 class UserDocumentVectorService {
+    static normalizePositiveInteger(value, fieldName) {
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+            throw new Error(`${fieldName} must be a positive integer`);
+        }
+        return parsed;
+    }
+
+    static normalizeIdList(values) {
+        if (!Array.isArray(values)) return null;
+        return [...new Set(values
+            .map((value) => Number.parseInt(value, 10))
+            .filter((value) => Number.isInteger(value) && value > 0))];
+    }
+
+    static buildUserDocumentFilter(userId, filters = {}) {
+        const normalizedUserId = this.normalizePositiveInteger(userId, 'userId');
+        const filter = {
+            must: [
+                {
+                    key: "user_id",
+                    match: {
+                        value: normalizedUserId
+                    }
+                }
+            ]
+        };
+
+        const documentIds = this.normalizeIdList(filters.documentIds || filters.document_ids);
+        if (documentIds) {
+            filter.must.push({
+                key: "document_id",
+                match: {
+                    any: documentIds
+                }
+            });
+        } else {
+            const documentId = filters.documentId || filters.document_id;
+            if (documentId) {
+                filter.must.push({
+                    key: "document_id",
+                    match: {
+                        value: this.normalizePositiveInteger(documentId, 'documentId')
+                    }
+                });
+            }
+        }
+
+        const propertyId = filters.propertyId || filters.property_id;
+        if (propertyId) {
+            filter.must.push({
+                key: "property_id",
+                match: {
+                    value: this.normalizePositiveInteger(propertyId, 'propertyId')
+                }
+            });
+        }
+
+        if (filters.category) {
+            filter.must.push({
+                key: "category",
+                match: {
+                    value: filters.category
+                }
+            });
+        }
+
+        if (filters.doc_type) {
+            filter.must.push({
+                key: "doc_type",
+                match: {
+                    value: filters.doc_type
+                }
+            });
+        }
+
+        if (filters.tags && filters.tags.length > 0) {
+            filter.must.push({
+                key: "tags",
+                match: {
+                    any: filters.tags
+                }
+            });
+        }
+
+        return filter;
+    }
+
+    static formatSearchResults(searchResult) {
+        return searchResult.map((result) => ({
+            id: result.id,
+            text: result.payload.text,
+            score: result.score,
+            metadata: {
+                document_id: result.payload.document_id,
+                user_id: result.payload.user_id,
+                property_id: result.payload.property_id || null,
+                property_ids: result.payload.property_ids || [],
+                filename: result.payload.filename,
+                doc_type: result.payload.doc_type,
+                category: result.payload.category,
+                tags: result.payload.tags || [],
+                chunk_index: result.payload.chunk_index
+            }
+        }));
+    }
+
     /**
      * Store document chunks in vector database
      * @param {string} textContent - Document text content
@@ -72,57 +179,12 @@ class UserDocumentVectorService {
         try {
             // Create query embedding
             const queryEmbedding = await OpenAIEmbeddingService.generateEmbedding(query);
-
-            // Build filter
-            const filter = {
-                must: [
-                    {
-                        key: "user_id",
-                        match: {
-                            value: userId
-                        }
-                    }
-                ]
-            };
-
-            // Add document filter if specified
-            if (documentId) {
-                filter.must.push({
-                    key: "document_id",
-                    match: {
-                        value: documentId
-                    }
-                });
-            }
-
-            // Search in Qdrant
-            const searchResult = await qdrantClient.search(
-                env.qdrant.userDocumentsCollection,
-                {
-                    vector: queryEmbedding,
-                    limit: limit * 2, // Get more results to filter
-                    with_payload: true,
-                    filter: filter
-                }
+            return this.searchUserDocumentsByEmbedding(
+                queryEmbedding,
+                userId,
+                documentId ? { documentId } : {},
+                limit
             );
-
-            // Filter and format results
-            const results = searchResult.slice(0, limit).map((result) => ({
-                id: result.id,
-                text: result.payload.text,
-                score: result.score,
-                metadata: {
-                    document_id: result.payload.document_id,
-                    user_id: result.payload.user_id,
-                    filename: result.payload.filename,
-                    doc_type: result.payload.doc_type,
-                    category: result.payload.category,
-                    tags: result.payload.tags || [],
-                    chunk_index: result.payload.chunk_index
-                }
-            }));
-
-            return results;
 
         } catch (error) {
             console.error('Error searching similar chunks:', error);
@@ -268,45 +330,24 @@ class UserDocumentVectorService {
     static async searchUserDocuments(query, userId, filters = {}, limit = 10) {
         try {
             const queryEmbedding = await OpenAIEmbeddingService.generateEmbedding(query);
+            return this.searchUserDocumentsByEmbedding(queryEmbedding, userId, filters, limit);
 
-            // Build filter
-            const filter = {
-                must: [
-                    {
-                        key: "user_id",
-                        match: {
-                            value: userId
-                        }
-                    }
-                ]
-            };
+        } catch (error) {
+            console.error('Error searching user documents:', error);
+            return [];
+        }
+    }
 
-            // Add additional filters
-            if (filters.category) {
-                filter.must.push({
-                    key: "category",
-                    match: {
-                        value: filters.category
-                    }
-                });
-            }
-
-            if (filters.doc_type) {
-                filter.must.push({
-                    key: "doc_type",
-                    match: {
-                        value: filters.doc_type
-                    }
-                });
-            }
-
-            if (filters.tags && filters.tags.length > 0) {
-                filter.must.push({
-                    key: "tags",
-                    match: {
-                        any: filters.tags
-                    }
-                });
+    /**
+     * Search user documents with a precomputed query embedding.
+     * Property-aware callers should resolve property scope through MySQL first and pass
+     * the allowed document IDs here; the required user_id filter is always applied.
+     */
+    static async searchUserDocumentsByEmbedding(queryEmbedding, userId, filters = {}, limit = 10) {
+        try {
+            const requestedDocumentIds = filters.documentIds || filters.document_ids;
+            if (Array.isArray(requestedDocumentIds) && this.normalizeIdList(requestedDocumentIds).length === 0) {
+                return [];
             }
 
             const searchResult = await qdrantClient.search(
@@ -315,26 +356,14 @@ class UserDocumentVectorService {
                     vector: queryEmbedding,
                     limit: limit,
                     with_payload: true,
-                    filter: filter
+                    filter: this.buildUserDocumentFilter(userId, filters)
                 }
             );
 
-            return searchResult.map((result) => ({
-                id: result.id,
-                text: result.payload.text,
-                score: result.score,
-                metadata: {
-                    document_id: result.payload.document_id,
-                    filename: result.payload.filename,
-                    doc_type: result.payload.doc_type,
-                    category: result.payload.category,
-                    tags: result.payload.tags || [],
-                    chunk_index: result.payload.chunk_index
-                }
-            }));
+            return this.formatSearchResults(searchResult);
 
         } catch (error) {
-            console.error('Error searching user documents:', error);
+            console.error('Error searching user documents by embedding:', error);
             return [];
         }
     }
