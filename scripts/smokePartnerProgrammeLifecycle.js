@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 const sequelize = require("../config/database");
-const { Partner, User } = require("../models");
+const { CohortMember, Partner, User } = require("../models");
 const PartnerOnboardingService = require("../services/partnerOnboardingService");
 const PartnerProgrammeService = require("../services/partnerProgrammeService");
 
@@ -60,6 +60,7 @@ const payloadFor = (partnerType, index) => ({
   for (const [index, partnerType] of partnerTypes.entries()) {
     const payload = payloadFor(partnerType, index + 1);
     if (partnerType === "mortgage_provider") payload.inviteMode = "individual_invite";
+    if (partnerType === "home_developer") payload.inviteMode = "cohort_code";
     const programme = await PartnerProgrammeService.createProgramme(
       payload,
       actor.id
@@ -102,6 +103,35 @@ const payloadFor = (partnerType, index) => ({
   );
   invite = await PartnerOnboardingService.validateInvite(
     individualInviteProgramme.cohorts[0].cohortKey
+  );
+  assert.equal(invite.invite.status, "ineligible");
+  assert.match(invite.invite.message, /invite route is not enabled/);
+
+  const individualMember = await CohortMember.create({
+    partner_cohort_id: individualInviteProgramme.cohorts[0].id,
+    external_member_ref: `ht329-${token}-individual-enabled`,
+    membership_status: "invited",
+    source_type: "manual",
+  });
+  invite = await PartnerOnboardingService.validateInvite(
+    individualMember.external_member_ref
+  );
+  assert.equal(invite.invite.status, "valid");
+
+  const cohortCodeProgramme = programmes[2];
+  await PartnerProgrammeService.transitionProgramme(
+    cohortCodeProgramme.id,
+    "active",
+    actor.id
+  );
+  const disabledIndividualMember = await CohortMember.create({
+    partner_cohort_id: cohortCodeProgramme.cohorts[0].id,
+    external_member_ref: `ht329-${token}-individual-disabled`,
+    membership_status: "invited",
+    source_type: "manual",
+  });
+  invite = await PartnerOnboardingService.validateInvite(
+    disabledIndividualMember.external_member_ref
   );
   assert.equal(invite.invite.status, "ineligible");
   assert.match(invite.invite.message, /invite route is not enabled/);
