@@ -2,7 +2,9 @@ const {
   CohortMember,
   ConsentRecord,
   Partner,
+  PartnerCampaign,
   PartnerCohort,
+  PartnerProgramme,
   Property,
   PropertyPerson,
 } = require("../models");
@@ -27,6 +29,12 @@ const CONSENT_TYPE_BY_SCOPE = {
   individual_report_access: "report_access",
   aggregate_analytics: "analytics",
 };
+
+const cohortContextIncludes = () => [
+  { model: Partner, required: true },
+  { model: PartnerProgramme, required: false },
+  { model: PartnerCampaign, required: false },
+];
 
 class PartnerOnboardingError extends Error {
   constructor(message, statusCode = 400, inviteStatus = "invalid") {
@@ -121,6 +129,20 @@ const validateCohortState = (partner, cohort) => {
     return {
       status: "ineligible",
       message: "This partner pilot is not currently available.",
+    };
+  }
+
+  if (cohort.PartnerProgramme && cohort.PartnerProgramme.status !== "active") {
+    return {
+      status: "ineligible",
+      message: "This partner programme is not currently accepting onboarding.",
+    };
+  }
+
+  if (cohort.PartnerCampaign && cohort.PartnerCampaign.status !== "active") {
+    return {
+      status: "ineligible",
+      message: "This partner campaign is not currently accepting onboarding.",
     };
   }
 
@@ -222,7 +244,7 @@ class PartnerOnboardingService {
         {
           model: PartnerCohort,
           required: true,
-          include: [{ model: Partner, required: true }],
+          include: cohortContextIncludes(),
         },
       ],
     });
@@ -239,7 +261,7 @@ class PartnerOnboardingService {
 
     const cohort = await PartnerCohort.findOne({
       where: { cohort_key: normalizedCode },
-      include: [{ model: Partner, required: true }],
+      include: cohortContextIncludes(),
     });
 
     if (!cohort) {
@@ -292,7 +314,7 @@ class PartnerOnboardingService {
         {
           model: PartnerCohort,
           required: true,
-          include: [{ model: Partner, required: true }],
+          include: cohortContextIncludes(),
         },
       ],
     });
