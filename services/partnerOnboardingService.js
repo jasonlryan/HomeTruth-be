@@ -732,6 +732,9 @@ class PartnerOnboardingService {
 
   static async recordInviteViewed(code) {
     const validation = await this.validateInvite(code);
+    if (validation.invite.status === "invalid") {
+      return { recorded: false, reason: "invalid_invite" };
+    }
     return PilotAnalyticsService.recordEvent({
       eventName: "invite_viewed",
       inviteCode: normalizeCode(code),

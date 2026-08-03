@@ -283,6 +283,10 @@ const createUser = async (partnerType, index) => {
   assert.equal(invalid.programme, null);
   assert.equal(invalid.campaign, null);
   assert.equal(invalid.member, null);
+  assert.deepEqual(
+    await PartnerOnboardingService.recordInviteViewed(`ht330-${token}-not-found`),
+    { recorded: false, reason: "invalid_invite" }
+  );
 
   await PartnerProgrammeService.transitionProgramme(
     fixtures[1].programme.id,
