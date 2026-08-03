@@ -43,6 +43,22 @@ const PilotEvent = sequelize.define(
         key: "id",
       },
     },
+    partner_programme_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "partner_programmes",
+        key: "id",
+      },
+    },
+    partner_campaign_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "partner_campaigns",
+        key: "id",
+      },
+    },
     cohort_member_id: {
       type: DataTypes.INTEGER,
       allowNull: true,

@@ -9,8 +9,11 @@ const handleError = (res, error) => {
 
   return res.status(statusCode).json({
     success: false,
-    message: error.message || "Partner onboarding request failed",
-    inviteStatus: error.inviteStatus,
+    message:
+      statusCode >= 500
+        ? "Partner onboarding request failed"
+        : error.message || "Partner onboarding request failed",
+    inviteStatus: statusCode >= 500 ? undefined : error.inviteStatus,
   });
 };
 
@@ -88,6 +91,17 @@ class PartnerOnboardingController {
         success: true,
         data,
       });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  }
+
+  static async recordInviteViewed(req, res) {
+    try {
+      const data = await PartnerOnboardingService.recordInviteViewed(
+        req.params.code
+      );
+      return res.status(202).json({ success: true, data });
     } catch (error) {
       return handleError(res, error);
     }

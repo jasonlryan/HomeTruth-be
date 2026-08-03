@@ -15,6 +15,8 @@ const PartnerCampaign = sequelize.define(
     },
     invite_route: { type: DataTypes.STRING(255), allowNull: true },
     approved_content_ref: { type: DataTypes.STRING(255), allowNull: true },
+    acquisition_config: { type: DataTypes.JSON, allowNull: true },
+    consent_config: { type: DataTypes.JSON, allowNull: true },
     start_date: { type: DataTypes.DATEONLY, allowNull: true },
     end_date: { type: DataTypes.DATEONLY, allowNull: true },
     created_by_user_id: { type: DataTypes.INTEGER, allowNull: true },
