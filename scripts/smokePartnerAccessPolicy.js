@@ -5,6 +5,7 @@ const {
   PartnerAccessAuditEvent,
   PartnerProgramme,
   PartnerProgrammeAccess,
+  PartnerProgrammeAuditEvent,
   User,
 } = require("../models");
 const PartnerAccessService = require("../services/partnerAccessService");
@@ -125,11 +126,27 @@ const main = async () => {
   );
 
   const manager = fixtures[1];
+  await PartnerProgrammeAuditEvent.create({
+    partner_programme_id: manager.programme.id,
+    actor_user_id: admin.id,
+    event_type: "status_changed",
+    previous_status: "paused",
+    new_status: "active",
+    changes: {},
+    occurred_at: new Date(),
+  });
   const managerAudit = await PartnerAccessService.getAuditEvents(
     manager.staff.id,
     manager.programme.id
   );
   assert(managerAudit.some((event) => event.eventType === "access_granted"));
+  assert(
+    managerAudit.some(
+      (event) =>
+        event.action === "programme:status_changed" &&
+        event.actorType === "hometruth_operator"
+    )
+  );
   assert(managerAudit.every((event) => !JSON.stringify(event).includes(manager.staff.email)));
 
   const analyst = fixtures[2];

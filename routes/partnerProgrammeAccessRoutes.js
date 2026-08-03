@@ -15,6 +15,7 @@ const individualResources = [
 ];
 
 router.use(authMiddleware);
+router.get("/access-status", controller.status);
 router.get("/", controller.list);
 router.get("/:id", controller.get);
 router.get("/:id/audit-events", controller.audit);

@@ -24,6 +24,17 @@ class PartnerProgrammeAccessController {
     }
   }
 
+  static async status(req, res) {
+    try {
+      return res.json({
+        success: true,
+        data: await PartnerAccessService.hasAnyAccess(req.user.id),
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  }
+
   static async get(req, res) {
     try {
       return res.json({

@@ -4,6 +4,7 @@ const {
   PartnerAccessAuditEvent,
   PartnerProgramme,
   PartnerProgrammeAccess,
+  PartnerProgrammeAuditEvent,
   User,
 } = require("../models");
 
@@ -160,8 +161,6 @@ const toPartnerProgrammeResponse = (access) => {
     role: value(access, "access_role"),
     assignmentStatus: value(access, "status"),
     capabilities: currentCapabilities(access),
-    reportingCapabilities: (ROLE_CAPABILITIES[value(access, "access_role")] || [])
-      .filter((capability) => capability.startsWith("report:")),
     programme: {
       id: value(programme, "id"),
       programmeKey: value(programme, "programme_key"),
@@ -472,13 +471,40 @@ class PartnerAccessService {
       include: accessInclude,
       order: [[PartnerProgramme, "name", "ASC"]],
     });
-    return assignments
+    const scopedAssignments = assignments
       .filter(
         (access) =>
           Number(value(access, "partner_id")) ===
           Number(value(access.PartnerProgramme, "partner_id"))
+      );
+    await Promise.all(
+      scopedAssignments.map((access) =>
+        recordAudit({
+          partnerId: value(access, "partner_id"),
+          programmeId: value(access, "partner_programme_id"),
+          accessId: value(access, "id"),
+          actorUserId: positiveInteger(userId, "userId"),
+          subjectUserId: value(access, "user_id"),
+          eventType: "programme_viewed",
+          action: "programme:list_summary",
+          resourceType: "partner_programme",
+          outcome: "allowed",
+          details: {
+            role: value(access, "access_role"),
+            partnerType: value(access.Partner, "partner_type"),
+            programmeStatus: value(access.PartnerProgramme, "status"),
+          },
+        })
       )
-      .map(toPartnerProgrammeResponse);
+    );
+    return scopedAssignments.map(toPartnerProgrammeResponse);
+  }
+
+  static async hasAnyAccess(userId) {
+    const count = await PartnerProgrammeAccess.count({
+      where: { user_id: positiveInteger(userId, "userId"), status: "active" },
+    });
+    return { hasAccess: count > 0 };
   }
 
   static async authorize(userId, programmeId, capability, options = {}) {
@@ -556,21 +582,35 @@ class PartnerAccessService {
 
   static async getAuditEvents(userId, programmeId) {
     const access = await this.authorize(userId, programmeId, "audit:view");
-    const events = await PartnerAccessAuditEvent.findAll({
-      where: { partner_programme_id: value(access, "partner_programme_id") },
-      attributes: [
-        "id",
-        "event_type",
-        "action",
-        "resource_type",
-        "outcome",
-        "reason_code",
-        "details",
-        "occurred_at",
-      ],
-      order: [["occurred_at", "DESC"]],
-      limit: 200,
-    });
+    const [accessEvents, programmeEvents] = await Promise.all([
+      PartnerAccessAuditEvent.findAll({
+        where: { partner_programme_id: value(access, "partner_programme_id") },
+        attributes: [
+          "id",
+          "event_type",
+          "action",
+          "resource_type",
+          "outcome",
+          "reason_code",
+          "details",
+          "occurred_at",
+        ],
+        order: [["occurred_at", "DESC"]],
+        limit: 200,
+      }),
+      PartnerProgrammeAuditEvent.findAll({
+        where: { partner_programme_id: value(access, "partner_programme_id") },
+        attributes: [
+          "id",
+          "event_type",
+          "previous_status",
+          "new_status",
+          "occurred_at",
+        ],
+        order: [["occurred_at", "DESC"]],
+        limit: 200,
+      }),
+    ]);
     await recordAudit({
       partnerId: value(access, "partner_id"),
       programmeId: value(access, "partner_programme_id"),
@@ -583,7 +623,7 @@ class PartnerAccessService {
       outcome: "allowed",
       details: { role: value(access, "access_role") },
     });
-    return events.map((event) => ({
+    const safeAccessEvents = accessEvents.map((event) => ({
       id: value(event, "id"),
       eventType: value(event, "event_type"),
       action: value(event, "action"),
@@ -591,8 +631,29 @@ class PartnerAccessService {
       outcome: value(event, "outcome"),
       reasonCode: value(event, "reason_code"),
       details: safeAuditDetails(value(event, "details")),
+      actorType: ["access_granted", "access_role_changed", "access_revoked"].includes(
+        value(event, "event_type")
+      )
+        ? "hometruth_operator"
+        : "partner_user",
       occurredAt: value(event, "occurred_at"),
     }));
+    const safeProgrammeEvents = programmeEvents.map((event) => ({
+      id: `programme-${value(event, "id")}`,
+      eventType: value(event, "event_type"),
+      action: `programme:${value(event, "event_type")}`,
+      resourceType: "partner_programme",
+      outcome: "allowed",
+      reasonCode: null,
+      details: safeAuditDetails({
+        programmeStatus: value(event, "new_status") || value(event, "previous_status"),
+      }),
+      actorType: "hometruth_operator",
+      occurredAt: value(event, "occurred_at"),
+    }));
+    return [...safeAccessEvents, ...safeProgrammeEvents]
+      .sort((left, right) => new Date(right.occurredAt) - new Date(left.occurredAt))
+      .slice(0, 200);
   }
 
   static async denyIndividualResource(userId, programmeId, resourceType) {
