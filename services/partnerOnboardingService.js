@@ -8,20 +8,22 @@ const {
   Property,
   PropertyPerson,
 } = require("../models");
+const sequelize = require("../config/database");
 const PilotAnalyticsService = require("./pilotAnalyticsService");
+const {
+  CONSENT_SCOPE_RULES,
+  buildAcquisitionPresentation,
+} = require("./partnerAcquisitionContract");
 
 const VALID_COHORT_STATUSES = new Set(["planned", "active"]);
 const VALID_MEMBER_STATUSES = new Set(["invited", "onboarded", "active"]);
 const USED_MEMBER_STATUSES = new Set(["onboarded", "active", "completed"]);
-const REQUIRED_CONSENT_SCOPES = [
-  "hometruth_processing",
-  "partner_reporting",
-  "aggregate_analytics",
-];
-const OPTIONAL_CONSENT_SCOPES = [
-  "individual_report_access",
-  "partner_contact_servicing",
-];
+const REQUIRED_CONSENT_SCOPES = CONSENT_SCOPE_RULES.filter(
+  ({ required }) => required
+).map(({ scope }) => scope);
+const OPTIONAL_CONSENT_SCOPES = CONSENT_SCOPE_RULES.filter(
+  ({ required }) => !required
+).map(({ scope }) => scope);
 const CONSENT_TYPE_BY_SCOPE = {
   hometruth_processing: "processing",
   partner_reporting: "reporting",
@@ -76,6 +78,26 @@ const toCohortResponse = (cohort) => ({
   endDate: cohort.end_date,
 });
 
+const toProgrammeResponse = (programme) => {
+  if (!programme) return null;
+  return {
+    id: programme.id,
+    programmeKey: programme.programme_key,
+    name: programme.name,
+    status: programme.status,
+  };
+};
+
+const toCampaignResponse = (campaign) => {
+  if (!campaign) return null;
+  return {
+    id: campaign.id,
+    campaignKey: campaign.campaign_key,
+    name: campaign.name,
+    status: campaign.status,
+  };
+};
+
 const toMemberResponse = (member) => {
   if (!member) return null;
   return {
@@ -108,12 +130,60 @@ const toConsentResponse = (record) => ({
   sourceType: record.source_type,
 });
 
-const toBrandingResponse = (partner, cohort) => ({
-  headline: `${partner.name} home pilot`,
-  partnerName: partner.name,
-  cohortName: cohort.name,
-  productName: "HomeTruth",
-});
+const acquisitionContext = (partner, cohort) => {
+  const programme = cohort?.PartnerProgramme || null;
+  const campaign = cohort?.PartnerCampaign || null;
+  const acquisition = buildAcquisitionPresentation({
+    partner,
+    programme,
+    campaign,
+    cohort,
+  });
+  return {
+    programme: toProgrammeResponse(programme),
+    campaign: toCampaignResponse(campaign),
+    acquisition,
+    branding: acquisition,
+    consentContract: acquisition.consentContract,
+    requiredConsentScopes: acquisition.consentContract.scopes
+      .filter(({ required }) => required)
+      .map(({ scope }) => scope),
+    optionalConsentScopes: acquisition.consentContract.scopes
+      .filter(({ required }) => !required)
+      .map(({ scope }) => scope),
+  };
+};
+
+const publicMemberResponse = (member) =>
+  member ? { membershipStatus: member.membership_status } : null;
+
+const consentStateForMember = async (member, userId, consentContract) => {
+  if (!member?.id || !userId) {
+    return { version: consentContract.version, completed: false, choices: {} };
+  }
+  const records = await ConsentRecord.findAll({
+    where: {
+      cohort_member_id: member.id,
+      user_id: userId,
+      consent_version: consentContract.version,
+      consent_scope: consentContract.scopes.map(({ scope }) => scope),
+    },
+    order: [
+      ["recorded_at", "DESC"],
+      ["id", "DESC"],
+    ],
+  });
+  const choices = {};
+  for (const record of records) {
+    if (choices[record.consent_scope] === undefined) {
+      choices[record.consent_scope] = record.status === "granted";
+    }
+  }
+  const completed = consentContract.scopes
+    .filter(({ required }) => required)
+    .every(({ scope }) => choices[scope] === true);
+  return { version: consentContract.version, completed, choices };
+};
 
 const recordPilotEventSilently = async (payload) => {
   try {
@@ -177,74 +247,62 @@ const validateCohortState = (partner, cohort, inviteMode = null) => {
   return null;
 };
 
-const buildInviteResponse = ({ code, mode, partner, cohort, member = null }) => {
+const buildInviteResponse = ({
+  code,
+  mode,
+  partner,
+  cohort,
+  member = null,
+  includeMemberIdentifiers = false,
+}) => {
+  const context = acquisitionContext(partner, cohort);
+  const response = (status, message, responseMember = member) => ({
+    invite: { code, mode, status, message },
+    partner: toPartnerResponse(partner),
+    cohort: toCohortResponse(cohort),
+    member: includeMemberIdentifiers
+      ? toMemberResponse(responseMember)
+      : publicMemberResponse(responseMember),
+    ...context,
+  });
   const blocked = validateCohortState(partner, cohort, mode);
   if (blocked) {
-    return {
-      invite: {
-        code,
-        mode,
-        status: blocked.status,
-        message: blocked.message,
-      },
-      partner: toPartnerResponse(partner),
-      cohort: toCohortResponse(cohort),
-      member: toMemberResponse(member),
-      branding: toBrandingResponse(partner, cohort),
-      requiredConsentScopes: REQUIRED_CONSENT_SCOPES,
-      optionalConsentScopes: OPTIONAL_CONSENT_SCOPES,
-    };
+    return response(blocked.status, blocked.message);
   }
 
   if (member) {
     if (!VALID_MEMBER_STATUSES.has(member.membership_status)) {
-      return {
-        invite: {
-          code,
-          mode,
-          status: "ineligible",
-          message: "This invite is no longer eligible for onboarding.",
-        },
-        partner: toPartnerResponse(partner),
-        cohort: toCohortResponse(cohort),
-        member: toMemberResponse(member),
-        branding: toBrandingResponse(partner, cohort),
-        requiredConsentScopes: REQUIRED_CONSENT_SCOPES,
-        optionalConsentScopes: OPTIONAL_CONSENT_SCOPES,
-      };
+      return response(
+        "ineligible",
+        "This invite is no longer eligible for onboarding."
+      );
     }
 
     if (member.user_id && USED_MEMBER_STATUSES.has(member.membership_status)) {
-      return {
-        invite: {
-          code,
-          mode,
-          status: "already_used",
-          message: "This invite has already been used.",
-        },
-        partner: toPartnerResponse(partner),
-        cohort: toCohortResponse(cohort),
-        member: null,
-        branding: toBrandingResponse(partner, cohort),
-        requiredConsentScopes: REQUIRED_CONSENT_SCOPES,
-        optionalConsentScopes: OPTIONAL_CONSENT_SCOPES,
-      };
+      return response(
+        "already_used",
+        "This invite has already been used.",
+        null
+      );
     }
   }
 
+  return response("valid", "Invite is valid.");
+};
+
+const claimedInviteResponse = async ({ code, mode, partner, cohort, member, userId }) => {
+  const context = acquisitionContext(partner, cohort);
   return {
-    invite: {
-      code,
-      mode,
-      status: "valid",
-      message: "Invite is valid.",
-    },
+    invite: { code, mode, status: "valid", message: "Invite is valid." },
     partner: toPartnerResponse(partner),
     cohort: toCohortResponse(cohort),
     member: toMemberResponse(member),
-    branding: toBrandingResponse(partner, cohort),
-    requiredConsentScopes: REQUIRED_CONSENT_SCOPES,
-    optionalConsentScopes: OPTIONAL_CONSENT_SCOPES,
+    ...context,
+    consentState: await consentStateForMember(
+      member,
+      userId,
+      context.consentContract
+    ),
   };
 };
 
@@ -279,6 +337,12 @@ class PartnerOnboardingService {
     });
 
     if (!cohort) {
+      const acquisition = buildAcquisitionPresentation({
+        partner: { name: null, partner_type: null },
+        programme: null,
+        campaign: null,
+        cohort: { name: null },
+      });
       return {
         invite: {
           code: normalizedCode,
@@ -287,16 +351,19 @@ class PartnerOnboardingService {
           message: "Invite code was not recognised.",
         },
         partner: null,
+        programme: null,
+        campaign: null,
         cohort: null,
         member: null,
-        branding: {
-          headline: "HomeTruth partner pilot",
-          partnerName: null,
-          cohortName: null,
-          productName: "HomeTruth",
-        },
-        requiredConsentScopes: REQUIRED_CONSENT_SCOPES,
-        optionalConsentScopes: OPTIONAL_CONSENT_SCOPES,
+        acquisition,
+        branding: acquisition,
+        consentContract: acquisition.consentContract,
+        requiredConsentScopes: acquisition.consentContract.scopes
+          .filter(({ required }) => required)
+          .map(({ scope }) => scope),
+        optionalConsentScopes: acquisition.consentContract.scopes
+          .filter(({ required }) => !required)
+          .map(({ scope }) => scope),
       };
     }
 
@@ -373,20 +440,14 @@ class PartnerOnboardingService {
         joined_at: member.joined_at || new Date(),
       });
 
-      return {
-        invite: {
-          code: normalizedCode,
-          mode: "individual_invite",
-          status: "valid",
-          message: "Invite is valid.",
-        },
-        partner: toPartnerResponse(member.PartnerCohort.Partner),
-        cohort: toCohortResponse(member.PartnerCohort),
-        member: toMemberResponse(member),
-        branding: toBrandingResponse(member.PartnerCohort.Partner, member.PartnerCohort),
-        requiredConsentScopes: REQUIRED_CONSENT_SCOPES,
-        optionalConsentScopes: OPTIONAL_CONSENT_SCOPES,
-      };
+      return claimedInviteResponse({
+        code: normalizedCode,
+        mode: "individual_invite",
+        partner: member.PartnerCohort.Partner,
+        cohort: member.PartnerCohort,
+        member,
+        userId,
+      });
     }
 
     const validation = await this.validateInvite(normalizedCode);
@@ -416,18 +477,43 @@ class PartnerOnboardingService {
     return {
       ...validation,
       member: toMemberResponse(member),
+      consentState: await consentStateForMember(
+        member,
+        userId,
+        validation.consentContract
+      ),
     };
   }
 
   static async recordConsents(userId, code, payload = {}) {
     const claimed = await this.claimInvite(userId, code);
-    const consentVersion = payload.consentVersion || "pilot-v1";
+    const consentContract = claimed.consentContract;
+    const consentVersion = consentContract.version;
     const consents = Array.isArray(payload.consents) ? payload.consents : [];
-    const consentByScope = new Map(
-      consents.map((consent) => [consent.scope || consent.consentScope, consent])
+    const consentByScope = new Map();
+    const allowedScopes = new Set(
+      consentContract.scopes.map(({ scope }) => scope)
     );
+    for (const consent of consents) {
+      const scope = consent.scope || consent.consentScope;
+      if (!allowedScopes.has(scope)) {
+        throw new PartnerOnboardingError(
+          `Unsupported consent scope: ${scope || "missing"}`,
+          400,
+          "invalid_consent"
+        );
+      }
+      if (consentByScope.has(scope)) {
+        throw new PartnerOnboardingError(
+          `Duplicate consent scope: ${scope}`,
+          400,
+          "invalid_consent"
+        );
+      }
+      consentByScope.set(scope, consent);
+    }
 
-    REQUIRED_CONSENT_SCOPES.forEach((scope) => {
+    consentContract.scopes.filter(({ required }) => required).forEach(({ scope }) => {
       const consent = consentByScope.get(scope);
       if (!consent || consent.granted !== true) {
         throw new PartnerOnboardingError(
@@ -438,68 +524,83 @@ class PartnerOnboardingService {
       }
     });
 
-    const scopes = [...REQUIRED_CONSENT_SCOPES, ...OPTIONAL_CONSENT_SCOPES];
+    const scopes = consentContract.scopes.map(({ scope }) => scope);
 
-    await ConsentRecord.update(
-      { status: "superseded" },
-      {
+    const hadProcessingConsent = Boolean(
+      await ConsentRecord.findOne({
         where: {
           cohort_member_id: claimed.member.id,
           user_id: userId,
-          consent_scope: scopes,
-          status: "granted",
+          consent_scope: "hometruth_processing",
+          status: ["granted", "superseded"],
         },
-      }
-    );
-
-    const records = await Promise.all(
-      scopes.map((scope) => {
-        const consent = consentByScope.get(scope);
-        const granted = consent?.granted === true;
-        const now = new Date();
-
-        return ConsentRecord.create({
-          partner_id: claimed.partner.id,
-          partner_cohort_id: claimed.cohort.id,
-          cohort_member_id: claimed.member.id,
-          user_id: userId,
-          property_id: claimed.member.propertyId || null,
-          consent_scope: scope,
-          consent_type: CONSENT_TYPE_BY_SCOPE[scope],
-          consent_version: consent?.version || consentVersion,
-          consent_text_hash: consent?.textHash || null,
-          status: granted ? "granted" : "withdrawn",
-          granted_at: granted ? now : null,
-          withdrawn_at: granted ? null : now,
-          recorded_at: now,
-          source_type: "onboarding",
-        });
       })
     );
 
-    await recordPilotEventSilently({
-      eventName: "signup_completed",
-      userId,
-      partnerId: claimed.partner.id,
-      partnerCohortId: claimed.cohort.id,
-      cohortMemberId: claimed.member.id,
-      partnerContextAllowed: true,
-      sourceType: "partner_onboarding",
-      sourceModel: "CohortMember",
-      sourceId: claimed.member.id,
-      metadata: {
-        inviteMode: claimed.invite.mode,
-        consentVersion,
-      },
+    const records = await sequelize.transaction(async (transaction) => {
+      await ConsentRecord.update(
+        { status: "superseded" },
+        {
+          where: {
+            cohort_member_id: claimed.member.id,
+            user_id: userId,
+            consent_scope: scopes,
+            status: ["granted", "withdrawn"],
+          },
+          transaction,
+        }
+      );
+
+      const created = [];
+      for (const definition of consentContract.scopes) {
+        const consent = consentByScope.get(definition.scope);
+        const granted = consent?.granted === true;
+        const now = new Date();
+
+        created.push(
+          await ConsentRecord.create(
+            {
+              partner_id: claimed.partner.id,
+              partner_cohort_id: claimed.cohort.id,
+              cohort_member_id: claimed.member.id,
+              user_id: userId,
+              property_id: claimed.member.propertyId || null,
+              consent_scope: definition.scope,
+              consent_type: CONSENT_TYPE_BY_SCOPE[definition.scope],
+              consent_version: consentVersion,
+              consent_text_hash: definition.textHash,
+              status: granted ? "granted" : "withdrawn",
+              granted_at: granted ? now : null,
+              withdrawn_at: granted ? null : now,
+              recorded_at: now,
+              source_type: "onboarding",
+            },
+            { transaction }
+          )
+        );
+      }
+      return created;
     });
+
+    if (!hadProcessingConsent) {
+      await recordPilotEventSilently({
+        eventName: "signup_completed",
+        userId,
+        inviteCode: code,
+        sourceType: "partner_onboarding",
+        sourceModel: "CohortMember",
+        sourceId: claimed.member.id,
+        metadata: {
+          inviteMode: claimed.invite.mode,
+          consentVersion,
+        },
+      });
+    }
 
     await recordPilotEventSilently({
       eventName: "consent_recorded",
       userId,
-      partnerId: claimed.partner.id,
-      partnerCohortId: claimed.cohort.id,
-      cohortMemberId: claimed.member.id,
-      partnerContextAllowed: true,
+      inviteCode: code,
       sourceType: "partner_onboarding",
       sourceModel: "ConsentRecord",
       sourceId: records[0]?.id || null,
@@ -517,11 +618,28 @@ class PartnerOnboardingService {
     return {
       ...claimed,
       consents: records.map(toConsentResponse),
+      consentState: {
+        version: consentVersion,
+        completed: true,
+        choices: Object.fromEntries(
+          records.map((record) => [
+            record.consent_scope,
+            record.status === "granted",
+          ])
+        ),
+      },
     };
   }
 
   static async attachProperty(userId, code, propertyId) {
     const claimed = await this.claimInvite(userId, code);
+    if (!claimed.consentState?.completed) {
+      throw new PartnerOnboardingError(
+        "HomeTruth processing consent is required before connecting a property",
+        400,
+        "missing_consent"
+      );
+    }
     const property = await Property.findByPk(propertyId);
     if (!property) {
       throw new PartnerOnboardingError("Property not found", 404, "invalid");
@@ -555,6 +673,7 @@ class PartnerOnboardingService {
     await recordPilotEventSilently({
       eventName: "property_setup_completed",
       userId,
+      inviteCode: code,
       propertyId: property.id,
       sourceType: "partner_onboarding",
       sourceModel: "CohortMember",
@@ -572,20 +691,59 @@ class PartnerOnboardingService {
 
   static async emitEvent(userId, payload = {}) {
     const eventName = payload.eventName || payload.event_name;
-    if (!eventName) {
-      throw new PartnerOnboardingError("eventName is required", 400, "invalid");
+    if (!userId) {
+      throw new PartnerOnboardingError(
+        "Authenticated user is required",
+        401,
+        "ineligible"
+      );
     }
+    if (eventName !== "property_started") {
+      throw new PartnerOnboardingError(
+        "Unsupported partner onboarding event",
+        400,
+        "invalid"
+      );
+    }
+    const inviteCode = payload.inviteCode || payload.invite_code;
+    const claimed = await this.claimInvite(userId, inviteCode);
+    if (!claimed.consentState?.completed) {
+      throw new PartnerOnboardingError(
+        "HomeTruth processing consent is required before starting a property",
+        400,
+        "missing_consent"
+      );
+    }
+    const path = payload.metadata?.path;
+    const safePath = new Set(["new_property", "existing_property"]).has(path)
+      ? path
+      : "new_property";
 
     const event = await PilotAnalyticsService.recordEvent({
       eventName,
-      inviteCode: payload.inviteCode || payload.invite_code || null,
-      userId: userId || null,
-      propertyId: payload.propertyId || payload.property_id || null,
+      inviteCode,
+      userId,
       sourceType: "partner_onboarding",
-      metadata: payload.metadata || {},
+      metadata: { path: safePath },
     });
 
     return event;
+  }
+
+  static async recordInviteViewed(code) {
+    const validation = await this.validateInvite(code);
+    if (validation.invite.status === "invalid") {
+      return { recorded: false, reason: "invalid_invite" };
+    }
+    return PilotAnalyticsService.recordEvent({
+      eventName: "invite_viewed",
+      inviteCode: normalizeCode(code),
+      sourceType: "partner_onboarding",
+      metadata: {
+        inviteStatus: validation.invite.status,
+        inviteMode: validation.invite.mode,
+      },
+    });
   }
 
   static async recordDailyActivity(userId) {

@@ -3,7 +3,9 @@ const {
   CohortMember,
   ConsentRecord,
   Partner,
+  PartnerCampaign,
   PartnerCohort,
+  PartnerProgramme,
   PilotEvent,
 } = require("../models");
 
@@ -85,6 +87,8 @@ const toEventResponse = (event) => ({
   eventName: event.event_name,
   eventCategory: event.event_category,
   partnerId: event.partner_id,
+  partnerProgrammeId: event.partner_programme_id,
+  partnerCampaignId: event.partner_campaign_id,
   partnerCohortId: event.partner_cohort_id,
   cohortMemberId: event.cohort_member_id,
   userId: event.user_id,
@@ -100,7 +104,7 @@ const toEventResponse = (event) => ({
   createdAt: event.createdAt,
 });
 
-const findInviteContext = async (inviteCode, options = {}) => {
+const findInviteContext = async (inviteCode, userId = null, options = {}) => {
   if (!inviteCode) return null;
 
   const member = await CohortMember.findOne({
@@ -109,7 +113,11 @@ const findInviteContext = async (inviteCode, options = {}) => {
       {
         model: PartnerCohort,
         required: true,
-        include: [{ model: Partner, required: true }],
+        include: [
+          { model: Partner, required: true },
+          { model: PartnerProgramme, required: false },
+          { model: PartnerCampaign, required: false },
+        ],
       },
     ],
     transaction: options.transaction,
@@ -125,15 +133,25 @@ const findInviteContext = async (inviteCode, options = {}) => {
 
   const cohort = await PartnerCohort.findOne({
     where: { cohort_key: inviteCode },
-    include: [{ model: Partner, required: true }],
+    include: [
+      { model: Partner, required: true },
+      { model: PartnerProgramme, required: false },
+      { model: PartnerCampaign, required: false },
+    ],
     transaction: options.transaction,
   });
 
   if (!cohort) return null;
+  const cohortMember = userId
+    ? await CohortMember.findOne({
+        where: { partner_cohort_id: cohort.id, user_id: userId },
+        transaction: options.transaction,
+      })
+    : null;
   return {
     partner: cohort.Partner,
     cohort,
-    member: null,
+    member: cohortMember,
   };
 };
 
@@ -150,7 +168,11 @@ const findUserCohortContext = async (userId, propertyId, options = {}) => {
       {
         model: PartnerCohort,
         required: true,
-        include: [{ model: Partner, required: true }],
+        include: [
+          { model: Partner, required: true },
+          { model: PartnerProgramme, required: false },
+          { model: PartnerCampaign, required: false },
+        ],
       },
     ],
     order: [["updatedAt", "DESC"]],
@@ -164,7 +186,11 @@ const findUserCohortContext = async (userId, propertyId, options = {}) => {
         {
           model: PartnerCohort,
           required: true,
-          include: [{ model: Partner, required: true }],
+          include: [
+            { model: Partner, required: true },
+            { model: PartnerProgramme, required: false },
+            { model: PartnerCampaign, required: false },
+          ],
         },
       ],
       order: [["updatedAt", "DESC"]],
@@ -201,6 +227,12 @@ const resolveContext = async (payload, options = {}) => {
   if (payload.partnerContextAllowed === true) {
     return {
       partnerId: toIntegerOrNull(payload.partnerId || payload.partner_id),
+      partnerProgrammeId: toIntegerOrNull(
+        payload.partnerProgrammeId || payload.partner_programme_id
+      ),
+      partnerCampaignId: toIntegerOrNull(
+        payload.partnerCampaignId || payload.partner_campaign_id
+      ),
       partnerCohortId: toIntegerOrNull(
         payload.partnerCohortId || payload.partner_cohort_id
       ),
@@ -218,10 +250,12 @@ const resolveContext = async (payload, options = {}) => {
   const eventName = normalizeEventName(payload.eventName || payload.event_name);
 
   if (eventName === "invite_viewed" && inviteCode) {
-    const inviteContext = await findInviteContext(inviteCode, options);
+    const inviteContext = await findInviteContext(inviteCode, null, options);
     if (!inviteContext) {
       return {
         partnerId: null,
+        partnerProgrammeId: null,
+        partnerCampaignId: null,
         partnerCohortId: null,
         cohortMemberId: null,
         consentScope: null,
@@ -231,6 +265,8 @@ const resolveContext = async (payload, options = {}) => {
 
     return {
       partnerId: inviteContext.partner.id,
+      partnerProgrammeId: inviteContext.cohort.PartnerProgramme?.id || null,
+      partnerCampaignId: inviteContext.cohort.PartnerCampaign?.id || null,
       partnerCohortId: inviteContext.cohort.id,
       cohortMemberId: null,
       consentScope: "cohort_entry_no_personal_data",
@@ -239,12 +275,14 @@ const resolveContext = async (payload, options = {}) => {
   }
 
   const context =
-    (inviteCode && (await findInviteContext(inviteCode, options))) ||
+    (inviteCode && (await findInviteContext(inviteCode, userId, options))) ||
     (await findUserCohortContext(userId, propertyId, options));
 
   if (!context) {
     return {
       partnerId: null,
+      partnerProgrammeId: null,
+      partnerCampaignId: null,
       partnerCohortId: null,
       cohortMemberId: null,
       consentScope: null,
@@ -256,6 +294,8 @@ const resolveContext = async (payload, options = {}) => {
   if (!aggregateAllowed) {
     return {
       partnerId: null,
+      partnerProgrammeId: null,
+      partnerCampaignId: null,
       partnerCohortId: null,
       cohortMemberId: null,
       consentScope: null,
@@ -265,6 +305,8 @@ const resolveContext = async (payload, options = {}) => {
 
   return {
     partnerId: context.partner.id,
+    partnerProgrammeId: context.cohort.PartnerProgramme?.id || null,
+    partnerCampaignId: context.cohort.PartnerCampaign?.id || null,
     partnerCohortId: context.cohort.id,
     cohortMemberId: context.member?.id || null,
     consentScope: AGGREGATE_SCOPE,
@@ -401,6 +443,8 @@ class PilotAnalyticsService {
         event_name: eventName,
         event_category: eventCategory,
         partner_id: context.partnerId,
+        partner_programme_id: context.partnerProgrammeId,
+        partner_campaign_id: context.partnerCampaignId,
         partner_cohort_id: context.partnerCohortId,
         cohort_member_id: context.cohortMemberId,
         user_id: userId,
@@ -479,6 +523,8 @@ class PilotAnalyticsService {
           userId: normalizedUserId,
           partnerContextAllowed: true,
           partnerId: context.partnerId,
+          partnerProgrammeId: context.partnerProgrammeId,
+          partnerCampaignId: context.partnerCampaignId,
           partnerCohortId: context.partnerCohortId,
           cohortMemberId: context.cohortMemberId,
           consentScope: AGGREGATE_SCOPE,

@@ -8,6 +8,10 @@ const {
   PartnerProgrammeAuditEvent,
   User,
 } = require("../models");
+const {
+  normalizeAcquisitionConfig,
+  normalizeConsentConfig,
+} = require("./partnerAcquisitionContract");
 
 const PARTNER_TYPES = new Set([
   "insurer",
@@ -129,6 +133,10 @@ const toCampaignResponse = (campaign) => ({
   status: value(campaign, "status"),
   inviteRoute: value(campaign, "invite_route"),
   approvedContentRef: value(campaign, "approved_content_ref"),
+  acquisitionConfig: normalizeAcquisitionConfig(
+    value(campaign, "acquisition_config")
+  ),
+  consentConfig: normalizeConsentConfig(value(campaign, "consent_config")),
   startDate: value(campaign, "start_date"),
   endDate: value(campaign, "end_date"),
 });
@@ -260,6 +268,8 @@ const buildCampaignInput = (payload) => {
       "approvedContentRef",
       255
     ),
+    acquisition_config: normalizeAcquisitionConfig(payload.acquisitionConfig),
+    consent_config: normalizeConsentConfig(payload.consentConfig),
     start_date: startDate,
     end_date: endDate,
   };

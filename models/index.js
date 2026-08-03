@@ -585,6 +585,26 @@ PilotEvent.belongsTo(PartnerCohort, {
   foreignKey: "partner_cohort_id",
 });
 
+PartnerProgramme.hasMany(PilotEvent, {
+  foreignKey: "partner_programme_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PilotEvent.belongsTo(PartnerProgramme, {
+  foreignKey: "partner_programme_id",
+});
+
+PartnerCampaign.hasMany(PilotEvent, {
+  foreignKey: "partner_campaign_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+
+PilotEvent.belongsTo(PartnerCampaign, {
+  foreignKey: "partner_campaign_id",
+});
+
 CohortMember.hasMany(PilotEvent, {
   foreignKey: "cohort_member_id",
   onDelete: "SET NULL",
