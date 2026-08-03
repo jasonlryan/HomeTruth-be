@@ -90,6 +90,9 @@ const main = async () => {
   }
 
   for (const fixture of fixtures) {
+    assert.deepEqual(await PartnerAccessService.hasAnyAccess(fixture.staff.id), {
+      hasAccess: true,
+    });
     const list = await PartnerAccessService.listMyProgrammes(fixture.staff.id);
     assert.equal(list.length, 1);
     assert.equal(list[0].partner.partnerType, fixture.partner.partner_type);
@@ -182,6 +185,25 @@ const main = async () => {
   await expectDenied(
     PartnerAccessService.getProgramme(sponsor.staff.id, sponsor.programme.id)
   );
+  assert.deepEqual(await PartnerAccessService.hasAnyAccess(sponsor.staff.id), {
+    hasAccess: false,
+  });
+
+  const mismatched = fixtures[3];
+  await PartnerProgrammeAccess.update(
+    { partner_id: fixtures[0].partner.id },
+    { where: { id: mismatched.assignment.id } }
+  );
+  assert.deepEqual(await PartnerAccessService.hasAnyAccess(mismatched.staff.id), {
+    hasAccess: false,
+  });
+  assert.equal(
+    (await PartnerAccessService.listMyProgrammes(mismatched.staff.id)).length,
+    0
+  );
+  await expectDenied(
+    PartnerAccessService.getProgramme(mismatched.staff.id, mismatched.programme.id)
+  );
 
   const auditCount = await PartnerAccessAuditEvent.count({
     where: { partner_programme_id: created.programmeIds },
@@ -189,7 +211,7 @@ const main = async () => {
   assert(auditCount >= 12, "expected grant, view, denial, role and revoke audit evidence");
 
   console.log(
-    "Partner access MySQL smoke passed for all four partner types and roles, grant/change/revoke, duplicate and cross-programme denial, lifecycle enforcement, explicit individual-resource denial, audit evidence and privacy-safe responses."
+    "Partner access MySQL smoke passed for all four partner types and roles, grant/change/revoke, duplicate, cross-programme and corrupt-scope denial, lifecycle enforcement, explicit individual-resource denial, audit evidence and privacy-safe responses."
   );
 };
 

@@ -287,77 +287,92 @@ class PartnerAccessService {
     const role = normalizeRole(payload.role);
     const email = normalizeEmail(payload.userEmail);
 
-    const accessId = await sequelize.transaction(async (transaction) => {
-      const programme = await loadProgrammeForAdmin(programmeId, {
-        transaction,
-        lock: true,
-      });
-      const users = await User.findAll({ where: { email }, transaction, limit: 2 });
-      if (users.length !== 1 || !value(users[0], "is_verified")) {
-        throw new PartnerAccessError(
-          "Access requires one verified HomeTruth user matching that email",
-          users.length > 1 ? 409 : 400
+    let accessId;
+    try {
+      accessId = await sequelize.transaction(async (transaction) => {
+        const programme = await loadProgrammeForAdmin(programmeId, {
+          transaction,
+          lock: true,
+        });
+        const users = await User.findAll({
+          where: { email },
+          transaction,
+          limit: 2,
+        });
+        if (users.length !== 1 || !value(users[0], "is_verified")) {
+          throw new PartnerAccessError(
+            "Access requires one verified HomeTruth user matching that email",
+            users.length > 1 ? 409 : 400
+          );
+        }
+        const subject = users[0];
+        let access = await PartnerProgrammeAccess.findOne({
+          where: {
+            partner_programme_id: value(programme, "id"),
+            user_id: value(subject, "id"),
+          },
+          transaction,
+          lock: true,
+        });
+        if (access && value(access, "status") === "active") {
+          throw new PartnerAccessError(
+            "That user already has active access to this programme",
+            409
+          );
+        }
+        if (access) {
+          await access.update(
+            {
+              partner_id: value(programme, "partner_id"),
+              access_role: role,
+              status: "active",
+              granted_by_user_id: actorId,
+              revoked_by_user_id: null,
+              granted_at: new Date(),
+              revoked_at: null,
+            },
+            { transaction }
+          );
+        } else {
+          access = await PartnerProgrammeAccess.create(
+            {
+              partner_id: value(programme, "partner_id"),
+              partner_programme_id: value(programme, "id"),
+              user_id: value(subject, "id"),
+              access_role: role,
+              status: "active",
+              granted_by_user_id: actorId,
+              granted_at: new Date(),
+            },
+            { transaction }
+          );
+        }
+        await recordAudit(
+          {
+            partnerId: value(programme, "partner_id"),
+            programmeId: value(programme, "id"),
+            accessId: value(access, "id"),
+            actorUserId: actorId,
+            subjectUserId: value(subject, "id"),
+            eventType: "access_granted",
+            action: "access:grant",
+            resourceType: "partner_programme_access",
+            outcome: "allowed",
+            details: { role, programmeStatus: value(programme, "status") },
+          },
+          { transaction }
         );
-      }
-      const subject = users[0];
-      let access = await PartnerProgrammeAccess.findOne({
-        where: {
-          partner_programme_id: value(programme, "id"),
-          user_id: value(subject, "id"),
-        },
-        transaction,
-        lock: true,
+        return value(access, "id");
       });
-      if (access && value(access, "status") === "active") {
+    } catch (error) {
+      if (error.name === "SequelizeUniqueConstraintError") {
         throw new PartnerAccessError(
           "That user already has active access to this programme",
           409
         );
       }
-      if (access) {
-        await access.update(
-          {
-            partner_id: value(programme, "partner_id"),
-            access_role: role,
-            status: "active",
-            granted_by_user_id: actorId,
-            revoked_by_user_id: null,
-            granted_at: new Date(),
-            revoked_at: null,
-          },
-          { transaction }
-        );
-      } else {
-        access = await PartnerProgrammeAccess.create(
-          {
-            partner_id: value(programme, "partner_id"),
-            partner_programme_id: value(programme, "id"),
-            user_id: value(subject, "id"),
-            access_role: role,
-            status: "active",
-            granted_by_user_id: actorId,
-            granted_at: new Date(),
-          },
-          { transaction }
-        );
-      }
-      await recordAudit(
-        {
-          partnerId: value(programme, "partner_id"),
-          programmeId: value(programme, "id"),
-          accessId: value(access, "id"),
-          actorUserId: actorId,
-          subjectUserId: value(subject, "id"),
-          eventType: "access_granted",
-          action: "access:grant",
-          resourceType: "partner_programme_access",
-          outcome: "allowed",
-          details: { role, programmeStatus: value(programme, "status") },
-        },
-        { transaction }
-      );
-      return value(access, "id");
-    });
+      throw error;
+    }
     return this.getAssignment(programmeId, accessId);
   }
 
@@ -501,10 +516,24 @@ class PartnerAccessService {
   }
 
   static async hasAnyAccess(userId) {
-    const count = await PartnerProgrammeAccess.count({
+    const assignments = await PartnerProgrammeAccess.findAll({
       where: { user_id: positiveInteger(userId, "userId"), status: "active" },
+      attributes: ["partner_id"],
+      include: [
+        {
+          model: PartnerProgramme,
+          required: true,
+          attributes: ["partner_id"],
+        },
+      ],
     });
-    return { hasAccess: count > 0 };
+    return {
+      hasAccess: assignments.some(
+        (access) =>
+          Number(value(access, "partner_id")) ===
+          Number(value(access.PartnerProgramme, "partner_id"))
+      ),
+    };
   }
 
   static async authorize(userId, programmeId, capability, options = {}) {
