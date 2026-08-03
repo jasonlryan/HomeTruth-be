@@ -8,6 +8,8 @@ const {
   Partner,
   PartnerCohort,
   PilotEvent,
+  Property,
+  PropertyPerson,
   User,
 } = require("../models");
 const PartnerOnboardingService = require("../services/partnerOnboardingService");
@@ -22,6 +24,7 @@ const partnerTypes = [
 ];
 const partnerIds = [];
 const userIds = [];
+const propertyIds = [];
 let actor = null;
 
 const payloadFor = (partnerType, index) => ({
@@ -153,6 +156,40 @@ const createUser = async (partnerType, index) => {
       }),
       /hometruth_processing consent is required/
     );
+    await assert.rejects(
+      PartnerOnboardingService.emitEvent(user.id, {
+        eventName: "property_started",
+        inviteCode,
+        metadata: { path: "new_property" },
+      }),
+      /processing consent is required/
+    );
+
+    let property = null;
+    if (partnerType === "insurer") {
+      property = await Property.create({
+        property_type: "house",
+        tenure: "freehold",
+        lifecycle_status: "active",
+        source_type: "manual",
+        created_by_user_id: user.id,
+      });
+      propertyIds.push(property.id);
+      await PropertyPerson.create({
+        property_id: property.id,
+        user_id: user.id,
+        relationship_type: "owner",
+        relationship_status: "active",
+        permission_level: "admin",
+        is_primary: true,
+        verification_status: "user_confirmed",
+        source_type: "manual",
+      });
+      await assert.rejects(
+        PartnerOnboardingService.attachProperty(user.id, inviteCode, property.id),
+        /processing consent is required/
+      );
+    }
 
     const aggregateGranted = partnerType === "insurer";
     const recorded = await PartnerOnboardingService.recordConsents(
@@ -213,6 +250,12 @@ const createUser = async (partnerType, index) => {
     );
 
     if (partnerType === "insurer") {
+      const linked = await PartnerOnboardingService.attachProperty(
+        user.id,
+        inviteCode,
+        property.id
+      );
+      assert.equal(linked.member.propertyId, property.id);
       await PartnerOnboardingService.recordConsents(user.id, inviteCode, {
         consents: [
           { scope: "hometruth_processing", granted: true },
@@ -291,6 +334,10 @@ const createUser = async (partnerType, index) => {
       await PilotEvent.destroy({ where: { user_id: userIds } });
       await ConsentRecord.destroy({ where: { user_id: userIds } });
       await CohortMember.destroy({ where: { user_id: userIds } });
+    }
+    if (propertyIds.length) {
+      await PropertyPerson.destroy({ where: { property_id: propertyIds } });
+      await Property.destroy({ where: { id: propertyIds } });
     }
     if (partnerIds.length) {
       await PilotEvent.destroy({ where: { partner_id: partnerIds } });

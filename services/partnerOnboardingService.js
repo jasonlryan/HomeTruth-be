@@ -633,6 +633,13 @@ class PartnerOnboardingService {
 
   static async attachProperty(userId, code, propertyId) {
     const claimed = await this.claimInvite(userId, code);
+    if (!claimed.consentState?.completed) {
+      throw new PartnerOnboardingError(
+        "HomeTruth processing consent is required before connecting a property",
+        400,
+        "missing_consent"
+      );
+    }
     const property = await Property.findByPk(propertyId);
     if (!property) {
       throw new PartnerOnboardingError("Property not found", 404, "invalid");
@@ -698,6 +705,15 @@ class PartnerOnboardingService {
         "invalid"
       );
     }
+    const inviteCode = payload.inviteCode || payload.invite_code;
+    const claimed = await this.claimInvite(userId, inviteCode);
+    if (!claimed.consentState?.completed) {
+      throw new PartnerOnboardingError(
+        "HomeTruth processing consent is required before starting a property",
+        400,
+        "missing_consent"
+      );
+    }
     const path = payload.metadata?.path;
     const safePath = new Set(["new_property", "existing_property"]).has(path)
       ? path
@@ -705,7 +721,7 @@ class PartnerOnboardingService {
 
     const event = await PilotAnalyticsService.recordEvent({
       eventName,
-      inviteCode: payload.inviteCode || payload.invite_code || null,
+      inviteCode,
       userId,
       sourceType: "partner_onboarding",
       metadata: { path: safePath },
