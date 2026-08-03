@@ -62,6 +62,7 @@ const adminDataRoutes = require('./routes/admin/adminDataRoutes');
 const adminArticleRoutes = require('./routes/admin/adminArticleRoutes');
 const adminPilotRoutes = require('./routes/admin/adminPilotRoutes');
 const adminPartnerProgrammeRoutes = require('./routes/admin/adminPartnerProgrammeRoutes');
+const partnerProgrammeAccessRoutes = require('./routes/partnerProgrammeAccessRoutes');
 const articleRoutes = require('./routes/articleRoutes');
 
 
@@ -91,6 +92,7 @@ app.use('/api/admin/users', adminDataRoutes);
 app.use('/api/admin/articles', adminArticleRoutes);
 app.use('/api/admin/pilot', adminPilotRoutes);
 app.use('/api/admin/partner-programmes', adminPartnerProgrammeRoutes);
+app.use('/api/partner/programmes', partnerProgrammeAccessRoutes);
 app.use('/api/articles', articleRoutes);
 
 // app.use("/api/zoopla", zoopla);
