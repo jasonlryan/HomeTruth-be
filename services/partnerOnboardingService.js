@@ -2,7 +2,9 @@ const {
   CohortMember,
   ConsentRecord,
   Partner,
+  PartnerCampaign,
   PartnerCohort,
+  PartnerProgramme,
   Property,
   PropertyPerson,
 } = require("../models");
@@ -27,6 +29,12 @@ const CONSENT_TYPE_BY_SCOPE = {
   individual_report_access: "report_access",
   aggregate_analytics: "analytics",
 };
+
+const cohortContextIncludes = () => [
+  { model: Partner, required: true },
+  { model: PartnerProgramme, required: false },
+  { model: PartnerCampaign, required: false },
+];
 
 class PartnerOnboardingError extends Error {
   constructor(message, statusCode = 400, inviteStatus = "invalid") {
@@ -116,11 +124,39 @@ const recordPilotEventSilently = async (payload) => {
   }
 };
 
-const validateCohortState = (partner, cohort) => {
+const validateCohortState = (partner, cohort, inviteMode = null) => {
   if (!partner || partner.status !== "active") {
     return {
       status: "ineligible",
       message: "This partner pilot is not currently available.",
+    };
+  }
+
+  if (cohort.PartnerProgramme && cohort.PartnerProgramme.status !== "active") {
+    return {
+      status: "ineligible",
+      message: "This partner programme is not currently accepting onboarding.",
+    };
+  }
+
+  if (cohort.PartnerProgramme && inviteMode) {
+    const configuredMode = cohort.PartnerProgramme.invite_mode;
+    const modeAllowed =
+      configuredMode === "both" ||
+      (configuredMode === "cohort_code" && inviteMode === "cohort_code") ||
+      (configuredMode === "individual_invite" && inviteMode === "individual_invite");
+    if (!modeAllowed) {
+      return {
+        status: "ineligible",
+        message: "This invite route is not enabled for the partner programme.",
+      };
+    }
+  }
+
+  if (cohort.PartnerCampaign && cohort.PartnerCampaign.status !== "active") {
+    return {
+      status: "ineligible",
+      message: "This partner campaign is not currently accepting onboarding.",
     };
   }
 
@@ -142,7 +178,7 @@ const validateCohortState = (partner, cohort) => {
 };
 
 const buildInviteResponse = ({ code, mode, partner, cohort, member = null }) => {
-  const blocked = validateCohortState(partner, cohort);
+  const blocked = validateCohortState(partner, cohort, mode);
   if (blocked) {
     return {
       invite: {
@@ -222,7 +258,7 @@ class PartnerOnboardingService {
         {
           model: PartnerCohort,
           required: true,
-          include: [{ model: Partner, required: true }],
+          include: cohortContextIncludes(),
         },
       ],
     });
@@ -239,7 +275,7 @@ class PartnerOnboardingService {
 
     const cohort = await PartnerCohort.findOne({
       where: { cohort_key: normalizedCode },
-      include: [{ model: Partner, required: true }],
+      include: cohortContextIncludes(),
     });
 
     if (!cohort) {
@@ -292,7 +328,7 @@ class PartnerOnboardingService {
         {
           model: PartnerCohort,
           required: true,
-          include: [{ model: Partner, required: true }],
+          include: cohortContextIncludes(),
         },
       ],
     });
@@ -300,7 +336,8 @@ class PartnerOnboardingService {
     if (existingMember) {
       const blocked = validateCohortState(
         existingMember.PartnerCohort.Partner,
-        existingMember.PartnerCohort
+        existingMember.PartnerCohort,
+        "individual_invite"
       );
       if (blocked) {
         throw new PartnerOnboardingError(

@@ -16,13 +16,15 @@ const Partner = sequelize.define(
     partner_type: {
       type: DataTypes.ENUM(
         "insurer",
+        "mortgage_provider",
+        "home_developer",
+        "other",
         "lender",
         "estate_agent",
-        "property_developer",
-        "other"
+        "property_developer"
       ),
       allowNull: false,
-      defaultValue: "insurer",
+      defaultValue: "other",
     },
     status: {
       type: DataTypes.ENUM("active", "paused", "archived"),
