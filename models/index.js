@@ -41,6 +41,8 @@ const PilotEvent = require("./pilotEvent");
 const PartnerProgramme = require("./partnerProgramme");
 const PartnerCampaign = require("./partnerCampaign");
 const PartnerProgrammeAuditEvent = require("./partnerProgrammeAuditEvent");
+const PartnerProgrammeAccess = require("./partnerProgrammeAccess");
+const PartnerAccessAuditEvent = require("./partnerAccessAuditEvent");
 
 
 
@@ -475,6 +477,69 @@ User.hasMany(PartnerProgrammeAuditEvent, {
   onUpdate: "CASCADE",
 });
 
+Partner.hasMany(PartnerProgrammeAccess, {
+  foreignKey: "partner_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+PartnerProgrammeAccess.belongsTo(Partner, { foreignKey: "partner_id" });
+
+PartnerProgramme.hasMany(PartnerProgrammeAccess, {
+  foreignKey: "partner_programme_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+PartnerProgrammeAccess.belongsTo(PartnerProgramme, {
+  foreignKey: "partner_programme_id",
+});
+
+User.hasMany(PartnerProgrammeAccess, {
+  foreignKey: "user_id",
+  as: "partnerProgrammeAccesses",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+PartnerProgrammeAccess.belongsTo(User, { foreignKey: "user_id", as: "user" });
+PartnerProgrammeAccess.belongsTo(User, {
+  foreignKey: "granted_by_user_id",
+  as: "grantedBy",
+});
+PartnerProgrammeAccess.belongsTo(User, {
+  foreignKey: "revoked_by_user_id",
+  as: "revokedBy",
+});
+
+Partner.hasMany(PartnerAccessAuditEvent, {
+  foreignKey: "partner_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+PartnerAccessAuditEvent.belongsTo(Partner, { foreignKey: "partner_id" });
+PartnerProgramme.hasMany(PartnerAccessAuditEvent, {
+  foreignKey: "partner_programme_id",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+PartnerAccessAuditEvent.belongsTo(PartnerProgramme, {
+  foreignKey: "partner_programme_id",
+});
+PartnerProgrammeAccess.hasMany(PartnerAccessAuditEvent, {
+  foreignKey: "partner_programme_access_id",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+PartnerAccessAuditEvent.belongsTo(PartnerProgrammeAccess, {
+  foreignKey: "partner_programme_access_id",
+});
+PartnerAccessAuditEvent.belongsTo(User, {
+  foreignKey: "actor_user_id",
+  as: "auditActor",
+});
+PartnerAccessAuditEvent.belongsTo(User, {
+  foreignKey: "subject_user_id",
+  as: "auditSubject",
+});
+
 Partner.hasMany(PartnerCohort, {
   foreignKey: "partner_id",
   onDelete: "CASCADE",
@@ -702,4 +767,6 @@ module.exports = {
   PartnerProgramme,
   PartnerCampaign,
   PartnerProgrammeAuditEvent,
+  PartnerProgrammeAccess,
+  PartnerAccessAuditEvent,
 };
