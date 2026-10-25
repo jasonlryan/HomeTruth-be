@@ -88,11 +88,12 @@ class PartnerEvidenceService {
     const programme = access.PartnerProgramme;
     if (access.Partner.reporting_mode !== "aggregate_only")
       throw new Access.Error("Aggregate reporting is unavailable", 403);
-    const campaigns = await PartnerCampaign.findAll({
+    const campaignQuery = {
       where: { partner_programme_id: programme.id },
       attributes: ["id", "name", "campaign_key"],
       raw: true,
-    });
+    };
+    const campaigns = await PartnerCampaign.findAll(campaignQuery);
     if (
       filters.campaignId &&
       !campaigns.some((campaign) => campaign.id === filters.campaignId)
@@ -101,7 +102,7 @@ class PartnerEvidenceService {
         "Campaign is not available for this programme",
         404,
       );
-    const cohorts = await PartnerCohort.findAll({
+    const cohortQuery = {
       where: {
         partner_id: partnerId,
         partner_programme_id: programme.id,
@@ -110,7 +111,8 @@ class PartnerEvidenceService {
       },
       attributes: ["id", "partner_campaign_id"],
       raw: true,
-    });
+    };
+    const cohorts = await PartnerCohort.findAll(cohortQuery);
     const memberQuery = {
       where: {
         partner_cohort_id: cohorts.map((cohort) => cohort.id),
@@ -248,18 +250,23 @@ class PartnerEvidenceService {
     const finalAccess = await Access.authorize(userId, programmeId, capability);
     if (finalAccess.Partner.reporting_mode !== "aggregate_only")
       throw new Access.Error("Aggregate reporting is unavailable", 403);
-    const [latestMembers, latestConsents] = await Promise.all([
-      CohortMember.findAll(memberQuery),
-      ConsentRecord.findAll(consentQuery),
-    ]);
+    const [latestMembers, latestConsents, latestCampaigns, latestCohorts] =
+      await Promise.all([
+        CohortMember.findAll(memberQuery),
+        ConsentRecord.findAll(consentQuery),
+        PartnerCampaign.findAll(campaignQuery),
+        PartnerCohort.findAll(cohortQuery),
+      ]);
     const fingerprint = (rows) =>
       JSON.stringify([...rows].sort((a, b) => a.id - b.id));
     if (
       fingerprint(members) !== fingerprint(latestMembers) ||
-      fingerprint(consents) !== fingerprint(latestConsents)
+      fingerprint(consents) !== fingerprint(latestConsents) ||
+      fingerprint(campaigns) !== fingerprint(latestCampaigns) ||
+      fingerprint(cohorts) !== fingerprint(latestCohorts)
     )
       throw new Access.Error(
-        "Consent or membership changed during this report. Please retry.",
+        "Reporting scope, consent or membership changed during this report. Please retry.",
         409,
       );
     if (!enabled(programmeId))
@@ -272,6 +279,8 @@ class PartnerEvidenceService {
     );
     return {
       state: "available",
+      privacyBoundary:
+        "Aggregate campaign evidence only. No individual homeowner, property, document, task, chat, feedback content or event rows are included.",
       generatedAt: new Date().toISOString(),
       month: filters.month,
       programme: { id: programme.id, name: programme.name },

@@ -232,6 +232,26 @@ async function main() {
   } finally {
     M.PilotEvent.findAll = originalFind;
   }
+  M.PilotEvent.findAll = async function (...args) {
+    const rows = await originalFind.apply(this, args);
+    await cohort.update({ reporting_level: "none" });
+    return rows;
+  };
+  try {
+    await assert.rejects(
+      Evidence.report(staff.id, programme.id, { month }),
+      (error) => error.statusCode === 409,
+    );
+  } finally {
+    M.PilotEvent.findAll = originalFind;
+    await cohort.update({ reporting_level: "aggregate_only" });
+  }
+  await partner.update({ reporting_mode: "none" });
+  await assert.rejects(
+    Evidence.report(staff.id, programme.id, { month }),
+    (error) => error.statusCode === 403,
+  );
+  await partner.update({ reporting_mode: "aggregate_only" });
   await programme.update({ status: "paused" });
   await assert.rejects(
     Evidence.report(staff.id, programme.id, { month }),

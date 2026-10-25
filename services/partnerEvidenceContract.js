@@ -63,7 +63,7 @@ const definitions = () => ({
   minimumParticipants: MIN_PARTICIPANTS,
   minimumCell: MIN_CELL,
   denominator:
-    "Distinct current cohort participants with current processing, analytics and partner-reporting consent, joined before month end. Withdrawn and removed participants are excluded, including their historical events.",
+    "Distinct current cohort participants with current processing, analytics and partner-reporting consent, joined before month end. Withdrawn, removed and ambiguously duplicated enrolments are excluded, including their historical events.",
   periods:
     "Complete UTC calendar months only. Campaign partitions do not overlap; no programme total is returned.",
   interpretation:
