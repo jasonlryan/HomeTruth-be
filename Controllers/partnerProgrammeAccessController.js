@@ -13,6 +13,30 @@ const handleError = (res, error) => {
 };
 
 class PartnerProgrammeAccessController {
+  static async evidence(req, res) {
+    try {
+      const service = require("../services/partnerEvidenceService");
+      return res.json({ success: true, data: await service.report(req.user.id, req.params.id, req.query) });
+    } catch (error) { return handleError(res, error); }
+  }
+
+  static async evidenceExport(req, res) {
+    try {
+      const service = require("../services/partnerEvidenceService");
+      const data = await service.report(req.user.id, req.params.id, req.query, true);
+      if (data.state === "approval_required") return res.status(403).json({ success: false, message: data.message });
+      res.set("Content-Disposition", 'attachment; filename="programme-evidence.json"');
+      return res.json(data);
+    } catch (error) { return handleError(res, error); }
+  }
+
+  static async evidenceDefinitions(req, res) {
+    try {
+      const service = require("../services/partnerEvidenceService");
+      return res.json({ success: true, data: await service.definitions(req.user.id, req.params.id) });
+    } catch (error) { return handleError(res, error); }
+  }
+
   static async list(req, res) {
     try {
       return res.json({
