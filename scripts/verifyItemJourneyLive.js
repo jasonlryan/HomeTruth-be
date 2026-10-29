@@ -58,7 +58,7 @@ async function main() {
     });
     home = profile.property.id;
     const form = new FormData();
-    form.append('documents', new Blob([fs.readFileSync('/tmp/ht341-synthetic-manual-normalized.pdf')], {
+    form.append('documents', new Blob([fs.readFileSync(require('path').join(__dirname,'fixtures/ht341/synthetic-manual.pdf'))], {
       type: 'application/pdf'
     }), 'synthetic-test-manual.pdf');
     form.append('propertyId', String(home));
@@ -110,7 +110,7 @@ async function main() {
     assert.ok(preview.preview_content || preview.preview_image);
     const again = await call(`/api/property-records/${home}/items/${item.id}`);
     assert.equal(again.record.identity.model, 'WAN282X2GB');
-    fs.writeFileSync('/tmp/ht341-live-context.json', JSON.stringify({
+    if(process.argv.includes('--keep')) fs.writeFileSync('/tmp/ht341-live-context.json', JSON.stringify({
       token,
       email,
       password,
