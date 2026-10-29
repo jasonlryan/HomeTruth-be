@@ -130,11 +130,13 @@ module.exports = function createItemIntelligence({
           sources
         })
       });
-      const statements = (Array.isArray(raw?.statements) ? raw.statements : []).slice(0, 12).filter(s => typeof s.answer === 'string' && typeof s.quote === 'string' && s.quote.trim() && sources.some(d => d.id === s.sourceId && d.text.includes(s.quote))).map(s => ({
-        answer: s.answer.slice(0, 4000),
-        sourceId: s.sourceId,
-        quote: s.quote.slice(0, 1500)
-      }));
+      const statements = (Array.isArray(raw?.statements) ? raw.statements : []).slice(0, 12).flatMap(s => {
+        if(typeof s.answer !== 'string')return [];
+        const source=sources.find(d=>d.id===s.sourceId);
+        const quote=source && require('./itemSourceQuote')(source.text,s.quote);
+        if(!quote)return [];
+        return [{answer:s.answer.slice(0,4000),sourceId:s.sourceId,quote:quote.slice(0,1500)}];
+      });
       return {
         statements,
         limitations: typeof raw?.limitations === 'string' ? raw.limitations.slice(0, 2000) : '',

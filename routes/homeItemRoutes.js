@@ -148,28 +148,15 @@ router.get('/items/:itemId/evidence/:evidenceId/file', async (req, res) => {
     });
   }
 });
-router.post('/items/:itemId/manual-search', costly, route(async r => {
-  const item = await service.find(r.user.id, r.params.propertyId, r.params.itemId);
-  const {
-    brand,
-    model
-  } = item.record.identity;
-  if (!brand || !model) throw new ItemError('Confirm a brand and exact model first, or attach the manual you have.');
-  const fallback = require('../services/manufacturerManuals')(brand, model);
-  try {
-    return {
-      ...fallback,
-      sources: await intelligence.discover(`${brand} ${model} official manufacturer manual PDF`)
-    };
-  } catch (e) {
-    if (e.statusCode !== 503 && e.statusCode !== 502) throw e;
-    return {
-      ...fallback,
-      sources: [],
-      lookupUnavailable: true
-    };
-  }
-}));
+const applianceAgent = require('../services/applianceAgentService')({
+  items: service,
+  Run: require('../models/applianceAgentRun'),
+  runtime: intelligence.applianceRuntime,
+  importManual: require('../services/importApplianceManual')({items:service,Document:models.UserDocument,vectorService:require('../services/userDocumentVectorService')})
+});
+router.get('/items/:itemId/agent/latest', route(r => applianceAgent.latest(r.user.id,r.params.propertyId,r.params.itemId)));
+router.post('/items/:itemId/manual-search', costly, route(r => applianceAgent.start(r.user.id,r.params.propertyId,r.params.itemId,r.body)));
+router.post('/items/:itemId/agent/:runId/save-manual', costly, route(r => applianceAgent.saveManual(r.user.id,r.params.propertyId,r.params.itemId,r.params.runId,r.body)));
 router.post('/items/:itemId/ask', costly, route(async r => {
   validate(Joi.object({
     question: Joi.string().trim().min(1).max(4000).required(),
@@ -187,7 +174,7 @@ router.post('/items/:itemId/ask', costly, route(async r => {
       documentId: doc.id,
       name: doc.name,
       digest: digest(doc.text_content),
-      text: doc.text_content.slice(0, 24000)
+      text: require('../services/itemSourceExcerpt')(doc.text_content, r.body.question)
     });
   }
   const answer = await intelligence.answer(r.body.question, sources);

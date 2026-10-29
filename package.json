@@ -48,5 +48,8 @@
   },
   "devDependencies": {
     "sequelize-cli": "^6.6.5"
-  }
+  },
+  "workspaces": [
+    "agent-runtime"
+  ]
 }

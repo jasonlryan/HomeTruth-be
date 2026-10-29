@@ -39,7 +39,7 @@ async function main() {
         primaryKey: true
       }
     });
-    for (const [name, table] of [['20261029120000-create-home-items.js', 'home_items'], ['20261029130000-create-home-item-answers.js', 'home_item_answers']]) {
+    for (const [name, table] of [['20261029120000-create-home-items.js', 'home_items'], ['20261029130000-create-home-item-answers.js', 'home_item_answers'], ['20261029150000-create-appliance-agent-runs.js', 'appliance_agent_runs']]) {
       const [done] = await db.query('SELECT name FROM SequelizeMeta WHERE name = :name', {
         replacements: {
           name
