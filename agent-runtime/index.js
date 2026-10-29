@@ -18,17 +18,26 @@ function createRuntime({ apiKey, model = 'gpt-4o-mini', searchModel = 'gpt-5-min
     traceIncludeSensitiveData: false
   });
   return {
-    async complete({ instruction, text, image }) {
+    async complete({ instruction, text, image, task }) {
+      const sourceAnswer=task==='source_answer';
+      let selected;
+      if(sourceAnswer){
+        const input=JSON.parse(text);
+        selected=input.sources.map(source=>({...source,passages:require('./sourcePassages').passagesFor(source.text)}));
+        text=JSON.stringify({question:input.question,sources:selected.map(({text,...source})=>source)});
+        instruction+='\nFor this task select sourceId and passageId for each statement instead of writing a quote. The server restores the original passage as its quotation. Use only the numbered passages; if none supports an answer, return empty statements. Never invent a passage ID.';
+      }
       const agent = new Agent({
         name: 'HomeTruth appliance evidence analyst', model,
-        ...(instruction.includes('Return JSON {statements:') ? {outputType:z.object({statements:z.array(z.object({answer:z.string(),sourceId:z.number(),quote:z.string()})),limitations:z.string()})} : {}),
+        ...(sourceAnswer ? {outputType:z.object({statements:z.array(z.object({answer:z.string(),sourceId:z.number(),passageId:z.number()})),limitations:z.string()})} : {}),
         instructions: instruction + '\nReturn one JSON object only, with no markdown fences. Propose information; never claim to save or update records.',
         modelSettings: { temperature: 0, maxTokens: 3000, store: false }
       });
       const content = [{ type: 'input_text', text: text || 'Read the supplied equipment label.' }];
       if (image) content.push({ type: 'input_image', image, detail: 'auto' });
       const result = await runner.run(agent, [{ role: 'user', content }], { maxTurns: 1, signal: AbortSignal.timeout(65000) });
-      return typeof result.finalOutput==='string'?JSON.parse(result.finalOutput):result.finalOutput;
+      const output=typeof result.finalOutput==='string'?JSON.parse(result.finalOutput):result.finalOutput;
+      return sourceAnswer?require('./sourcePassages').restoreStatements(output,selected):output;
     },
     async discoverProduct(query, domains) {
       const agent=new Agent({name:'HomeTruth appliance model finder',model:searchModel,

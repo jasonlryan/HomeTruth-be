@@ -86,3 +86,12 @@ test('a rejected answer explains missing verified quotations instead of an empty
  const intelligence=require('../services/itemIntelligence')({complete:async()=>({statements:[{answer:'Invented',sourceId:1,quote:'Not in this document'}],limitations:{}})});
  const answer=await intelligence.answer('What next?',[{id:1,text:'Read the instructions.'}]);assert.equal(answer.statements.length,0);assert.match(answer.limitations,/No exact supporting quotation/);
 });
+
+test('source answers restore original passages from IDs and discard invented IDs',()=>{
+ const {passagesFor,restoreStatements}=require('../agent-runtime/sourcePassages');
+ const text='1.\nPull out the drawer. '+('Use a soft brush. '.repeat(60)),passages=passagesFor(text);
+ assert.equal(passages.map(p=>p.text).join(''),text);
+ for(const p of passagesFor('First source span.\n\n[Another selected passage]\n\nLater source span.'))assert.ok(!p.text.includes('[Another selected passage]'));
+ const answer=restoreStatements({statements:[{answer:'Use a brush.',sourceId:1,passageId:1},{answer:'Invented',sourceId:1,passageId:999}],limitations:''},[{id:1,passages}]);
+ assert.equal(answer.statements.length,1);assert.equal(answer.statements[0].quote,passages[1].text);assert.ok(text.includes(answer.statements[0].quote));
+});

@@ -26,7 +26,7 @@ async function main(){
  assert.equal(saved.status,'saved');docId=saved.documentId;
  const refreshed=await call(path);const evidence=refreshed.evidence.find(e=>e.documentId===docId);assert.ok(evidence?.hasText);assert.equal(evidence.matchStatus,'user_confirmed');
  assert.equal((await call(path+'/agent/latest')).status,'saved');
- const answer=await call(path+'/ask','POST',{question:'What does the manual say about safety and children?',evidenceIds:[evidence.id]});assert.ok(answer.statements.length,'Retrieved real manual supports sourced question: '+JSON.stringify(answer));
+ const answer=await call(path+'/ask','POST',{question:'What model is this manual for?',evidenceIds:[evidence.id]});assert.ok(answer.statements.length,'Retrieved real manual supports sourced question: '+JSON.stringify(answer));
  const download=await fetch(base+path+`/evidence/${evidence.id}/file`,{headers:{Authorization:token}});assert.equal(download.status,200);assert.equal(Buffer.from(await download.arrayBuffer()).subarray(0,5).toString(),'%PDF-');
  passed=true;
  if(process.argv.includes('--keep'))fs.writeFileSync('/tmp/ht341-agent-live-context.json',JSON.stringify({token,email,userId:user.id,home,itemId:item.id,documentId:docId}),{mode:0o600});
