@@ -53,3 +53,9 @@ test('answers retain only exact selected-source quotes and safe search links',as
   const result=await ai.answer('Which programme?',[{id:7,text:'Use programme A.'}]);assert.equal(result.statements.length,1);
   assert.equal((await ai.discover('model')).length,1);
 });
+test('receipt proposals keep per-item evidence and reject unsupported warranty dates',async()=>{
+ const text='Example W100. Purchased 2026-10-01 from Shop. Price GBP 500 on 2026-10-01. Two year warranty.';
+ const ai=createIntelligence({complete:async()=>({candidates:[{name:'Washer',brand:'Example',model:'W100',quote:'Example W100',fields:[{path:'purchase.date',value:'2026-10-01',quote:'Purchased 2026-10-01 from Shop.'},{path:'purchase.retailer',value:'Shop',quote:'Purchased 2026-10-01 from Shop.'},{path:'purchase.price',value:{amount:500,currency:'GBP',date:'2026-10-01',source:'receipt'},quote:'Price GBP 500 on 2026-10-01.'},{path:'warranty.endDate',value:'2028-10-01',quote:'Two year warranty.'},{path:'warranty.provider',value:'Invented',quote:'missing'}]}]})});
+ const result=await ai.identify({text});assert.equal(result.candidates[0].purchase.price.amount,500);assert.equal(result.candidates[0].purchase.retailer,'Shop');assert.deepEqual(result.candidates[0].warranty,{});
+});
+test('source readiness and development CORS do not widen production access',()=>{const {readable}=require('../services/itemSource');assert.equal(readable({status:'ready',text_content:'[IMAGE FILE: x] - no text extracted'}),false);assert.equal(readable({status:'processing',text_content:'old text'}),false);const allowed=require('../config/corsOrigins');assert.equal(allowed('http://127.0.0.1:3012',{nodeEnv:'development'}),true);assert.equal(allowed('http://127.0.0.1:3012',{nodeEnv:'production'}),false);assert.equal(allowed('http://127.0.0.1.evil:3012',{nodeEnv:'development'}),false);});

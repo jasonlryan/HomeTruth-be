@@ -4,6 +4,7 @@ const { execFileSync } = require('node:child_process');
 const { Sequelize, DataTypes } = require('sequelize');
 const createService = require('../services/homeItemService');
 const migration = require('../migrations/20261029120000-create-home-items');
+const answerMigration=require('../migrations/20261029130000-create-home-item-answers');
 async function main() {
   if (process.env.HT341_LOCAL_DB_VERIFY !== 'true') throw new Error('Set HT341_LOCAL_DB_VERIFY=true to test the isolated local Docker database.');
   const config=JSON.parse(execFileSync('docker',['inspect','hometruth-mysql'],{encoding:'utf8'}))[0];
@@ -19,10 +20,10 @@ async function main() {
     const pk={type:DataTypes.INTEGER,primaryKey:true,autoIncrement:true};
     await q.createTable('users',{id:pk});await q.createTable('properties',{id:pk});
     await q.createTable('userDocuments',{id:pk,user_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN,name:DataTypes.STRING,status:DataTypes.STRING,text_content:DataTypes.TEXT});
-    await migration.up(q,Sequelize);
+    await migration.up(q,Sequelize);await answerMigration.up(q,Sequelize);
     // Load the actual model definitions against the isolated connection, never application env.
     require.cache[require.resolve('../config/database')]={exports:db};
-    const Item=require('../models/homeItem'), Evidence=require('../models/homeItemEvidence');
+    const Item=require('../models/homeItem'), Evidence=require('../models/homeItemEvidence'),Answer=require('../models/homeItemAnswer');
     const Document=db.define('TestDoc',{id:pk,user_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN,name:DataTypes.STRING,status:DataTypes.STRING,text_content:DataTypes.TEXT},{tableName:'userDocuments',timestamps:false});
     const Person=db.define('TestPerson',{user_id:DataTypes.INTEGER,property_id:DataTypes.INTEGER,relationship_status:DataTypes.STRING,permission_level:DataTypes.STRING},{tableName:'verify_people',timestamps:false});
     const PropertyDocument=db.define('TestPropertyDoc',{property_id:DataTypes.INTEGER,user_document_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN},{tableName:'verify_document_links',timestamps:false});
@@ -39,6 +40,17 @@ async function main() {
     const reread=await createService({Item,Evidence,Document,Person,PropertyDocument,db}).get(1,42,row.id);
     assert.equal(reread.record.values.current.amount,300);assert.equal(reread.record.purchase.price.amount,500);assert.equal(reread.record.values.replacement.amount,650);
     await assert.rejects(s.get(3,42,row.id),e=>e.statusCode===404);await assert.rejects(s.update(2,42,row.id,{version:1,record}),e=>e.statusCode===403);
+    const personalAnswers=require('../services/itemAnswerService')({items:s,Evidence,Answer,secret:'isolated-test-secret-only'});
+    const linked=await s.attach(1,42,row.id,{documentId:5,role:'manual',matchStatus:'user_confirmed'});
+    const source={id:linked.evidence[0].id,documentId:5,name:'Synthetic manual',digest:require('../services/itemAnswerService').digest('Use programme A.')};
+    const token=personalAnswers.issue(1,42,row.id,'Which programme?',{statements:[{answer:'Use A',quote:'Use programme A.',sourceId:source.id}],generatedAt:new Date().toISOString()},[source]);
+    await personalAnswers.save(1,42,row.id,token);await personalAnswers.save(1,42,row.id,token);
+    assert.equal((await personalAnswers.list(1,42,row.id)).length,1);assert.equal((await personalAnswers.list(2,42,row.id)).length,0);
+    await assert.rejects(personalAnswers.save(2,42,row.id,token),e=>e.statusCode===404);
+    await Document.update({text_content:'Changed source'},{where:{id:5}});assert.equal((await personalAnswers.list(1,42,row.id))[0].answer,null);
+    await assert.rejects(personalAnswers.save(1,42,row.id,token),e=>e.statusCode===409);
+    await Document.update({text_content:'Use programme A.'},{where:{id:5}});await s.detach(1,42,row.id,source.id);
+    assert.equal((await personalAnswers.list(1,42,row.id))[0].sourceUnavailable,true);
     const other=await s.create(1,43,{...payload,requestKey:'e99d6b94-a656-4591-b78f-cdeab470c316'});
     const raced=await Promise.allSettled([s.attach(1,42,row.id,{documentId:5,role:'manual',matchStatus:'user_confirmed'}),s.attach(1,43,other.id,{documentId:5,role:'manual',matchStatus:'user_confirmed'})]);
     assert.equal(raced.filter(r=>r.status==='fulfilled').length,1);assert.equal(raced.find(r=>r.status==='rejected').reason.statusCode,409);
@@ -67,7 +79,7 @@ async function main() {
       await new Promise(resolve=>{process.once('SIGTERM',resolve);process.once('SIGINT',resolve);});
       await new Promise(resolve=>server.close(resolve));
     }
-    await migration.down(q);await migration.up(q,Sequelize);await migration.down(q);
+    await answerMigration.down(q);await migration.down(q);await migration.up(q,Sequelize);await answerMigration.up(q,Sequelize);await answerMigration.down(q);await migration.down(q);
     console.log('PASS: isolated MySQL migration up/down/reapply, persistent records, separate values, permissions, concurrent cross-home evidence and stale-edit conflicts. No application database modified.');
   } finally {
     if(db)await db.close();await root.query(`DROP DATABASE IF EXISTS \`${schema}\``);await root.close();

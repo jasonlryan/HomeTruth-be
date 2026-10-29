@@ -29,7 +29,7 @@ module.exports = function createHomeItemService({ Item, Evidence, Person, Docume
       for (const link of links) {
         // Property access never grants access to another person's private documents.
         const doc = await Document.findOne({ where: { id: link.user_document_id, user_id: id(user), is_active: true } });
-        if (doc) evidence.push({ id: link.id, documentId: doc.id, name: doc.name, status: doc.status, role: link.role, matchStatus: link.match_status, hasText: Boolean(doc.text_content) && !['processing','error'].includes(doc.status) });
+        if (doc) evidence.push({ id: link.id, documentId: doc.id, name: doc.name, status: doc.status, role: link.role, matchStatus: link.match_status, hasText: require('./itemSource').readable(doc) });
       }
       return { ...response(item), evidence };
     },
