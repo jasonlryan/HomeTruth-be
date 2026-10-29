@@ -52,16 +52,17 @@ async function main() {
       const secret=require('crypto').randomBytes(32).toString('hex');
       require.cache[require.resolve('../config/env')]={exports:{jwtSecret:secret}};
       require.cache[require.resolve('../models')]={exports:{PropertyPerson:Person,UserDocument:Document,PropertyDocument}};
-      require.cache[require.resolve('../services/itemProvider')]={exports:require('../services/itemIntelligence')({complete:async({text})=>({candidates:[{name:'Synthetic washer',brand:'Example',model:'W100',quote:'Example W100'}],statements:[{answer:'The selected synthetic manual says to use programme A.',sourceId:1,quote:'Use programme A.'}]}),search:async()=>[]})};
+      require.cache[require.resolve('../services/itemProvider')]={exports:require('../services/itemIntelligence')({complete:async({text})=>{ const sources=text.startsWith('{') ? JSON.parse(text).sources : null; return {candidates:[{name:'Synthetic washer',brand:'Example',model:'W100',quote:'Example W100'}],statements:sources?.length ? [{answer:'The selected synthetic manual says to use programme A.',sourceId:sources[0].id,quote:'Use programme A.'}] : []}; },search:async()=>[]})};
       const auth=require('../Middleware/authMiddleware');
       app.get('/review-session',(req,res)=>res.json({token:jwt.sign({id:1},secret,{expiresIn:'2h'})}));
       app.use('/api',auth);
       app.get('/api/property-records',(req,res)=>res.json({success:true,data:[42,43].map(id=>({property:{id},currentAddress:{addressLine1:`Synthetic review home ${id}`},relationship:{relationshipType:'owner',permissionLevel:'admin'}}))}));
       app.get('/api/user-documents',async(req,res)=>res.json({success:true,data:{documents:await Document.findAll()}}));
       app.use('/api/property-records/:propertyId',require('../routes/homeItemRoutes'));
+      app.post('/api/partner-onboarding/activity',(req,res)=>res.json({success:true,data:{synthetic:true}}));
       app.get('/api/*',(req,res)=>res.json({success:true,data:{}}));
       await Item.destroy({where:{}}); // Only this isolated schema's synthetic test records.
-      const server=app.listen(3014,'127.0.0.1');
+      const server=await new Promise(resolve=>{const active=app.listen(3014,'127.0.0.1',()=>resolve(active));});
       console.log('LOCAL SYNTHETIC REVIEW ONLY: UI 3013, isolated API 3014. AI/search are test doubles; records persist only in a disposable schema.');
       await new Promise(resolve=>{process.once('SIGTERM',resolve);process.once('SIGINT',resolve);});
       await new Promise(resolve=>server.close(resolve));
