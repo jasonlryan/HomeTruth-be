@@ -38,4 +38,4 @@ function reviewCandidates(raw, brand, model) {
 function assertSameIdentity(item, snapshot) {
   if (item.record.identity.brand !== snapshot.brand || item.record.identity.model !== snapshot.model) throw new ItemError('The model changed. Run the agent again before using these findings.', 409);
 }
-module.exports = { domainsFor, officialURL, containsModel, reviewCandidates, assertSameIdentity };
+module.exports = { manufacturerDomains: [...new Set(Object.values(manufacturers).flat())], domainsFor, officialURL, containsModel, reviewCandidates, assertSameIdentity };
