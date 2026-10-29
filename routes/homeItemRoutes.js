@@ -35,7 +35,7 @@ router.post('/items/identify', costly,
     }
     if (method === 'document') {
       const doc = await service.document(r.user.id, r.body.documentId);
-      if (!doc.text_content) throw new ItemError('This document has no readable text yet. Try selected text or a label photo.');
+      if (!doc.text_content || ['processing','error'].includes(doc.status)) throw new ItemError('This document has no readable text yet. Try selected text or a label photo.');
       text = doc.text_content.slice(0,24000);
     }
     if (method === 'online') {
@@ -65,7 +65,7 @@ router.post('/items/:itemId/ask', costly, route(async r => {
     const link = item.evidence.find(e => e.id === id(evidenceId));
     if (!link || link.matchStatus !== 'user_confirmed') throw new ItemError('Select confirmed evidence belonging to this item.');
     const doc = await service.document(r.user.id,link.documentId);
-    if (!doc.text_content) throw new ItemError('A selected document is not readable yet.');
+    if (!doc.text_content || ['processing','error'].includes(doc.status)) throw new ItemError('A selected document is not readable yet.');
     sources.push({ id:link.id,name:doc.name,text:doc.text_content.slice(0,24000) });
   }
   return intelligence.answer(r.body.question,sources);

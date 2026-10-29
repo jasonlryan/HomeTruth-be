@@ -39,6 +39,8 @@ test('document associations do not grant private access or leak across homes',as
   assert.equal((await service.get(2,42,a.id)).evidence.length,0);
   await assert.rejects(service.attach(1,43,b.id,payload),e=>e.statusCode===409);
   await assert.rejects(service.attach(1,42,a.id,{...payload,documentId:999}),e=>e.statusCode===404);
+  const blocked=fixture(); const blockedItem=await blocked.service.create(1,42,{requestKey:'e99d6b94-a656-4591-b78f-cdeab470c315',record:base()});blocked.docs[0].status='processing';
+  assert.equal((await blocked.service.attach(1,42,blockedItem.id,payload)).evidence[0].hasText,false);
   await service.detach(1,42,a.id,1);assert.equal((await service.get(1,42,a.id)).evidence.length,0);
 });
 test('identification rejects unsupported quotes and guessed variants',async()=>{
