@@ -78,3 +78,7 @@ test('a repeat search reuses an already attached manual instead of downloading a
  assert.equal(await importer({user:1,home:2,itemId:3,identity:{brand:'Bosch',model:'W100'},candidate:{url:'https://bosch-home.co.uk/manual.pdf'},runId:5}),8);
  assert.equal(attach.length,1);
 });
+
+test('an expired download deadline fails before DNS or network access',async()=>{
+ await assert.rejects(()=>require('../services/applianceManualDownload').download('https://bosch-home.co.uk/manual.pdf',domainsFor('Bosch'),0,0));
+});

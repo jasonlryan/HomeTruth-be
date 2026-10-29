@@ -10,16 +10,16 @@ function publicAddress(address) {
   const [a,b] = address.split('.').map(Number);
   return !(a===0 || a===10 || a===127 || a>=224 || a===169&&b===254 || a===172&&b>=16&&b<=31 || a===192&&(b===168||b===0) || a===100&&b>=64&&b<=127 || a===198&&(b===18||b===19));
 }
-async function download(url, domains, redirects = 0) {
-  if (!officialURL(url, domains) || redirects > 3) throw new ItemError('This manual cannot be imported automatically. Use the official finder or upload the file.');
+async function download(url, domains, redirects = 0, deadline = Date.now()+45000) {
+  if (Date.now()>=deadline || !officialURL(url, domains) || redirects > 3) throw new ItemError('This manual cannot be imported automatically. Use the official finder or upload the file.');
   const addresses = await dns.lookup(new URL(url).hostname, { all: true, family: 4 });
   if (!addresses.length || addresses.some(a => !publicAddress(a.address))) throw new ItemError('The manual address is not an allowed public source.');
   return new Promise((resolve, reject) => {
-    const request = https.get(url, { timeout: 15000, lookup: (_host, options, cb) => options.all ? cb(null, [addresses[0]]) : cb(null, addresses[0].address, 4), headers: { 'User-Agent': 'HomeTruth/1.0 (user-requested appliance manual)', Accept: 'application/pdf' } }, response => {
+    const request = https.get(url, { timeout: 15000, signal: AbortSignal.timeout(Math.max(1,deadline-Date.now())), lookup: (_host, options, cb) => options.all ? cb(null, [addresses[0]]) : cb(null, addresses[0].address, 4), headers: { 'User-Agent': 'HomeTruth/1.0 (user-requested appliance manual)', Accept: 'application/pdf' } }, response => {
       if ([301,302,303,307,308].includes(response.statusCode)) {
         response.resume();
         let next; try { next = new URL(response.headers.location, url).href; } catch { return reject(new ItemError('Invalid manual redirect.')); }
-        return download(next, domains, redirects+1).then(resolve,reject);
+        return download(next, domains, redirects+1, deadline).then(resolve,reject);
       }
       if (response.statusCode !== 200 || Number(response.headers['content-length'] || 0) > MAX_BYTES) { response.resume(); return reject(new ItemError('The manufacturer did not return a PDF under 5 MB.')); }
       let size=0; const chunks=[];
