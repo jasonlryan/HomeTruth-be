@@ -82,3 +82,7 @@ test('a repeat search reuses an already attached manual instead of downloading a
 test('an expired download deadline fails before DNS or network access',async()=>{
  await assert.rejects(()=>require('../services/applianceManualDownload').download('https://bosch-home.co.uk/manual.pdf',domainsFor('Bosch'),0,0));
 });
+test('a rejected answer explains missing verified quotations instead of an empty result',async()=>{
+ const intelligence=require('../services/itemIntelligence')({complete:async()=>({statements:[{answer:'Invented',sourceId:1,quote:'Not in this document'}],limitations:{}})});
+ const answer=await intelligence.answer('What next?',[{id:1,text:'Read the instructions.'}]);assert.equal(answer.statements.length,0);assert.match(answer.limitations,/No exact supporting quotation/);
+});
