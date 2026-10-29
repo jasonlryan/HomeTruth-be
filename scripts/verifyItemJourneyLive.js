@@ -58,7 +58,7 @@ async function main() {
     });
     home = profile.property.id;
     const form = new FormData();
-    form.append('documents', new Blob([fs.readFileSync(require('path').join(__dirname,'fixtures/ht341/synthetic-manual.pdf'))], {
+    form.append('documents', new Blob([Buffer.from(require('./fixtures/ht341/synthetic-manual.json').base64,'base64')], {
       type: 'application/pdf'
     }), 'synthetic-test-manual.pdf');
     form.append('propertyId', String(home));
