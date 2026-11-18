@@ -292,7 +292,7 @@ const chatController = {
       
       try {
         if (retrievalContext.sourceSummary.sourceClasses?.includes('uploaded_user_document')) {
-          assistantReply = await reviewDocumentAnswer({ client: openai, model: 'gpt-4o-mini', question: userMessage, context: relevantContext });
+          assistantReply = await reviewDocumentAnswer({ client: openai, model: 'gpt-4o-mini', question: userMessage, context: relevantContext, priorQuestions: previousChats.map(chat => chat.userMessage) });
         } else {
         const response = await openai.chat.completions.create({
           model: 'gpt-4o-mini', // Faster than gpt-4, still excellent quality
