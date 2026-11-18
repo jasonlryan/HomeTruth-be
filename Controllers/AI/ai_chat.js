@@ -291,7 +291,9 @@ const chatController = {
       let assistantReply;
       
       try {
-        // Use OpenAI directly - faster and more reliable
+        if (retrievalContext.sourceSummary.sourceClasses?.includes('uploaded_user_document')) {
+          assistantReply = await reviewDocumentAnswer({ client: openai, model: 'gpt-4o-mini', question: userMessage, context: relevantContext });
+        } else {
         const response = await openai.chat.completions.create({
           model: 'gpt-4o-mini', // Faster than gpt-4, still excellent quality
           messages,
@@ -300,16 +302,12 @@ const chatController = {
         });
 
         assistantReply = response.choices[0].message.content;
+        }
       } catch (openaiError) {
         console.error('❌ OpenAI error:', openaiError.message);
         throw openaiError;
       }
   
-      // Review before persistence so saved notes/history receive the same checked answer.
-      if (retrievalContext.sourceSummary.sourceClasses?.includes('uploaded_user_document')) {
-        assistantReply = await reviewDocumentAnswer({ client: openai, model: 'gpt-4o-mini', question: userMessage, context: relevantContext, answer: assistantReply });
-      }
-
       // Save to DB with conversation ID and is_saved flag
       const savedChat = await ChatHistory.create({
         user_id: parseInt(user_id),
