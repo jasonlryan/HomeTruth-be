@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const documentEvidencePolicy = require('../../services/documentEvidencePolicy');
 const { ChatHistory, User, GuestChatSession } = require('../../models/index');
 const { Op } = require('sequelize');
 const env = require('../../config/env');
@@ -13,7 +14,9 @@ const openai = new OpenAI({
 
 const systemMessage = {
   role: 'system',
-  content: `You are HomeTruth, an expert AI assistant helping UK homebuyers make informed, risk-aware decisions in the UK property market.
+  content: `${documentEvidencePolicy}
+
+You are HomeTruth, an expert AI assistant helping UK homebuyers make informed, risk-aware decisions in the UK property market.
 
 Operating principles (RAG-first):
 - Only rely on the provided Sources section. Treat it as authoritative HomeTruth context retrieved from labelled source classes. If key facts are missing, say so and request the needed info.
@@ -26,7 +29,7 @@ Answer style and structure:
 - Be friendly, concise, and actionable in plain English. Use contractions and UK-focused terms.
 - Use clear headings and short paragraphs; prefer bullet points for lists.
 - Where appropriate, include brief checklists, timelines, or comparison tables.
-- Avoid hedging language; state certainty levels explicitly (Confident / Uncertain – why).
+- State uncertainty explicitly; never strengthen a claim beyond the source evidence.
 
 Required output format:
 1. Short answer: 2–4 sentence direct answer based on the sources.
@@ -291,7 +294,7 @@ const chatController = {
         const response = await openai.chat.completions.create({
           model: 'gpt-4o-mini', // Faster than gpt-4, still excellent quality
           messages,
-          temperature: 0.7,
+          temperature: 0,
           max_tokens: 1000
         });
 

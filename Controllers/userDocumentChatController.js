@@ -1,3 +1,4 @@
+const documentEvidencePolicy = require('../services/documentEvidencePolicy');
 const { UserDocument, UserDocumentChatHistory } = require('../models');
 const UserDocumentAnalysisService = require('../services/userDocumentAnalysisService');
 const UserDocumentVectorService = require('../services/userDocumentVectorService');
@@ -110,14 +111,14 @@ Provide a helpful, accurate answer based on the document content. If the informa
                         messages: [
                             {
                                 role: 'system',
-                                content: 'You are a helpful assistant that answers questions about property documents. Be accurate and cite specific information from the document when possible.'
+                                content: documentEvidencePolicy + '\nAnswer questions about property documents using only the supplied evidence.'
                             },
                             {
                                 role: 'user',
                                 content: prompt
                             }
                         ],
-                        temperature: 0.3,
+                        temperature: 0,
                         top_p: 0.9,
                         max_tokens: 4096
                     });
