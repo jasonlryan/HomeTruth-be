@@ -1,3 +1,4 @@
+const { reviewDocumentAnswer } = require('../../services/documentEvidenceReview');
 const OpenAI = require('openai');
 const documentEvidencePolicy = require('../../services/documentEvidencePolicy');
 const { ChatHistory, User, GuestChatSession } = require('../../models/index');
@@ -304,6 +305,11 @@ const chatController = {
         throw openaiError;
       }
   
+      // Review before persistence so saved notes/history receive the same checked answer.
+      if (retrievalContext.sourceClasses?.includes('uploaded_user_document')) {
+        assistantReply = await reviewDocumentAnswer({ client: openai, model: 'gpt-4o-mini', question: userMessage, context: relevantContext, answer: assistantReply });
+      }
+
       // Save to DB with conversation ID and is_saved flag
       const savedChat = await ChatHistory.create({
         user_id: parseInt(user_id),

@@ -1,3 +1,4 @@
+const { reviewDocumentAnswer } = require('../services/documentEvidenceReview');
 const documentEvidencePolicy = require('../services/documentEvidencePolicy');
 const { UserDocument, UserDocumentChatHistory } = require('../models');
 const UserDocumentAnalysisService = require('../services/userDocumentAnalysisService');
@@ -142,6 +143,8 @@ Provide a helpful, accurate answer based on the document content. If the informa
                     aiResponse = 'I couldn\'t find relevant information in this document to answer your question. Please try rephrasing your question or check if the document contains the information you\'re looking for.';
                 }
             }
+
+            aiResponse = await reviewDocumentAnswer({ client: openai, model: LLM_MODEL, question, context: relevantChunks.length ? relevantChunks.map(chunk => chunk.text).join('\n\n') : (document.text_content || '').substring(0, 2000), answer: aiResponse });
 
             // Save chat history
             try {
