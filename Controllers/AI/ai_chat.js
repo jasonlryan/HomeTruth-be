@@ -306,7 +306,7 @@ const chatController = {
       }
   
       // Review before persistence so saved notes/history receive the same checked answer.
-      if (retrievalContext.sourceClasses?.includes('uploaded_user_document')) {
+      if (retrievalContext.sourceSummary.sourceClasses?.includes('uploaded_user_document')) {
         assistantReply = await reviewDocumentAnswer({ client: openai, model: 'gpt-4o-mini', question: userMessage, context: relevantContext, answer: assistantReply });
       }
 

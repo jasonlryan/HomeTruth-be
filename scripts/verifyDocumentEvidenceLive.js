@@ -35,7 +35,8 @@ async function main() {
   for (const item of results) {
     const answer=item.data.data.savedChat?.assistantReply || item.data.data.current_answer;
     assert.equal(typeof answer,'string',JSON.stringify(item.data));
-    assert(!/you (?:have )?paid £360|damp (?:is|has been) (?:fixed|resolved)/i.test(answer),answer);
+    assert(!/you (?:have )?(?:paid|not paid)|you (?:have|had) internal damp/i.test(answer), answer);
+    if (item.question !== 'Survey diagnosis') assert(/payment[\s\S]{0,150}(?:unknown|unrecorded|not (?:recorded|confirm|establish)|does not|unverified)|(?:not|no)[\s\S]{0,70}(?:confirm|establish|evidence)[\s\S]{0,70}payment/i.test(answer), answer);
   }
   console.log('Live cases completed. Inspect every answer for source fidelity before acceptance.');
 }
