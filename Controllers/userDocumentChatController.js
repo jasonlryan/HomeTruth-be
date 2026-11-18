@@ -1,5 +1,5 @@
+const { reviewDocumentAnswer } = require('../services/documentEvidenceReview');
 const { UserDocument, UserDocumentChatHistory } = require('../models');
-const UserDocumentAnalysisService = require('../services/userDocumentAnalysisService');
 const UserDocumentVectorService = require('../services/userDocumentVectorService');
 const OpenAI = require('openai');
 const env = require('../config/env');
@@ -85,62 +85,13 @@ class UserDocumentChatController {
                 5
             );
 
-            let aiResponse = '';
-
-            if (relevantChunks.length > 0) {
-                // Use RAG approach with relevant chunks
-                const context = relevantChunks.map(chunk => chunk.text).join('\n\n');
-                
-                const prompt = `Based on the following document content, answer the user's question. Be specific and cite relevant parts of the document.
-
-Document: ${document.name}
-Document Type: ${document.doc_type}
-Category: ${document.category}
-
-Relevant content from document:
-${context}
-
-User question: ${question}
-
-Provide a helpful, accurate answer based on the document content. If the information is not available in the document, say so clearly.`;
-
-                try {
-                    const response = await openai.chat.completions.create({
-                        model: LLM_MODEL,
-                        messages: [
-                            {
-                                role: 'system',
-                                content: 'You are a helpful assistant that answers questions about property documents. Be accurate and cite specific information from the document when possible.'
-                            },
-                            {
-                                role: 'user',
-                                content: prompt
-                            }
-                        ],
-                        temperature: 0.3,
-                        top_p: 0.9,
-                        max_tokens: 4096
-                    });
-
-                    aiResponse = response.choices[0].message.content;
-
-                } catch (openaiError) {
-                    console.error('OpenAI error:', openaiError);
-                    aiResponse = 'I encountered an error while processing your question. Please try again.';
-                }
-
-            } else {
-                // Fallback to simple analysis if no relevant chunks found
-                try {
-                    aiResponse = await UserDocumentAnalysisService.analyzeForChat(
-                        document.text_content || '',
-                        question
-                    );
-                } catch (analysisError) {
-                    console.error('Analysis error:', analysisError);
-                    aiResponse = 'I couldn\'t find relevant information in this document to answer your question. Please try rephrasing your question or check if the document contains the information you\'re looking for.';
-                }
-            }
+            const context = relevantChunks.length
+                ? relevantChunks.map(chunk => chunk.text).join('\n\n')
+                : (document.text_content || '').substring(0, 2000);
+            const aiResponse = await reviewDocumentAnswer({
+                client: openai, model: LLM_MODEL, question,
+                context: `Document: ${document.name}\n${context}`
+            });
 
             // Save chat history
             try {
