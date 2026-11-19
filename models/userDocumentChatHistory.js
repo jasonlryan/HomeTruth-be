@@ -48,6 +48,7 @@ const UserDocumentChatHistory = sequelize.define("user_document_chat_history", {
         index: true
     },
 }, {
+    tableName: "user_document_chat_histories",
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',

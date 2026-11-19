@@ -30,7 +30,7 @@ const GuestChatSession = sequelize.define("guest_chat_session", {
     allowNull: false,
     defaultValue: DataTypes.NOW,
   },
-});
+}, { tableName: "guest_chat_sessions" });
 
 
 module.exports = GuestChatSession;

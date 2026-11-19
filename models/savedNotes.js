@@ -14,6 +14,9 @@ const SavedNote = sequelize.define("saved_notes", {
     },
     chat_history_id: {
         type: DataTypes.INTEGER,
+        references: { model: "chat_histories", key: "id" },
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE",
         allowNull: false,
         index: true // Reference to the chat history record
     },

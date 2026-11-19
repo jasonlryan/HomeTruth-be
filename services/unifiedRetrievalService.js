@@ -195,7 +195,7 @@ class UnifiedRetrievalService {
     };
   }
 
-  static async buildPropertyContext(userId, propertyId, limits = DEFAULT_LIMITS) {
+  static async requirePropertyMembership(userId, propertyId) {
     const relationship = await PropertyPerson.findOne({
       where: {
         user_id: userId,
@@ -208,6 +208,16 @@ class UnifiedRetrievalService {
       throw new UnifiedRetrievalAccessError("Property record not found", 404);
     }
 
+    return relationship;
+  }
+
+  static async actionContext(userId, propertyId) {
+    if (propertyId) await this.requirePropertyMembership(userId, propertyId);
+    return this.emptyContext('', {userId, propertyId});
+  }
+
+  static async buildPropertyContext(userId, propertyId, limits = DEFAULT_LIMITS) {
+    const relationship = await this.requirePropertyMembership(userId, propertyId);
     const [property, currentAddress, linkedDocuments, facts, tasks] =
       await Promise.all([
         Property.findByPk(propertyId),

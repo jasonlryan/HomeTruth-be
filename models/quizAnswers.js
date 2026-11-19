@@ -11,6 +11,9 @@ const QuizAnswer = sequelize.define("quiz_answers", {
     },
     user_id: {
         type: DataTypes.INTEGER,
+        references: { model: "users", key: "id" },
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE",
     allowNull: false,
     },
     question_id: {
