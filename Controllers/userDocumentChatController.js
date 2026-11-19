@@ -1,3 +1,4 @@
+const { chatPagination } = require('../utils/chatPagination');
 const { reviewDocumentAnswer } = require('../services/documentEvidenceReview');
 const { UserDocument, UserDocumentChatHistory } = require('../models');
 const UserDocumentVectorService = require('../services/userDocumentVectorService');
@@ -109,20 +110,22 @@ class UserDocumentChatController {
                 // Continue even if saving fails
             }
 
-            // Get ALL chat history for this document (all conversations)
+            // Return the newest bounded history window; older records remain available via pagination.
             const allChatHistory = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.findAll({
                     where: {
                         user_id: req.user.id,
                         document_id: document.id
                     },
-                    order: [['created_at', 'ASC']],
+                    order: [['created_at', 'DESC'], ['id', 'DESC']],
+                    limit: 21,
                     attributes: ['id', 'conversation_id', 'user_message', 'assistant_reply', 'created_at', 'has_context']
                 });
             });
 
             // Format chat history for frontend display
-            const formattedMessages = allChatHistory.map(chat => ({
+            const hasMoreHistory = allChatHistory.length > 20;
+            const formattedMessages = allChatHistory.slice(0, 20).reverse().map(chat => ({
                 id: chat.id,
                 type: 'message',
                 conversation_id: chat.conversation_id,
@@ -152,7 +155,8 @@ class UserDocumentChatController {
                     current_answer: aiResponse,
                     has_context: relevantChunks.length > 0,
                     chat_history: formattedMessages,
-                    total_messages: formattedMessages.length
+                    total_messages: formattedMessages.length,
+                    pagination: { current_page: 1, limit: 20, has_next_page: hasMoreHistory }
                 }
             });
 
@@ -170,6 +174,8 @@ class UserDocumentChatController {
      * Get chat history for a specific document
      */
     static async getDocumentChatHistory(req, res) {
+        const paging = chatPagination(req.query);
+        if (!paging) return res.status(400).json({ success: false, message: 'page must be a positive integer and limit must be between 1 and 100' });
         try {
             const { id } = req.params;
             const { conversation_id } = req.query;
@@ -201,13 +207,18 @@ class UserDocumentChatController {
             }
 
             // Get chat history with retry logic
-            const chatHistory = await UserDocumentChatController.retryQuery(async () => {
+            const historyRows = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.findAll({
                     where: whereClause,
-                    order: [['created_at', 'ASC']],
+                    order: [['created_at', 'DESC'], ['id', 'DESC']],
+                    limit: paging.limit + 1,
+                    offset: paging.offset,
                     attributes: ['id', 'conversation_id', 'user_message', 'assistant_reply', 'created_at', 'has_context']
                 });
             });
+
+            const hasMore = historyRows.length > paging.limit;
+            const chatHistory = historyRows.slice(0, paging.limit).reverse();
 
             // Format chat history for frontend display
             const formatChatHistory = (history) => {
@@ -258,6 +269,7 @@ class UserDocumentChatController {
                     document_id: document.id,
                     document_name: document.name,
                     conversation_id: conversation_id || null,
+                    pagination: { current_page: paging.page, limit: paging.limit, has_next_page: hasMore, has_prev_page: paging.page > 1 },
                     chat_history: groupedHistory,
                     total_conversations: conversation_id ? 1 : Object.keys(groupedHistory).length,
                     total_messages: conversation_id ? groupedHistory.length : Object.values(groupedHistory).flat().length
@@ -568,9 +580,12 @@ Provide insights about:
      * Get all chats for a document (simplified version of chat history)
      */
     static async getDocumentChats(req, res) {
+        const paging = chatPagination(req.query);
+        if (!paging) return res.status(400).json({ success: false, message: 'page must be a positive integer and limit must be between 1 and 100' });
         try {
             const { id } = req.params;
-            const { page = 1, limit = 20, conversation_id } = req.query;
+            const { conversation_id } = req.query;
+            const { page, limit, offset } = paging;
 
             // Find the document
             const document = await UserDocument.findOne({
@@ -598,9 +613,6 @@ Provide insights about:
                 whereClause.conversation_id = conversation_id;
             }
 
-            // Calculate pagination
-            const offset = (parseInt(page) - 1) * parseInt(limit);
-
             // Get total count with retry logic
             const totalCount = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.count({
@@ -612,7 +624,7 @@ Provide insights about:
             const chatHistory = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.findAll({
                     where: whereClause,
-                    order: [['created_at', 'DESC']], // Most recent first
+                    order: [['created_at', 'DESC'], ['id', 'DESC']], // Most recent first
                     limit: parseInt(limit),
                     offset: offset,
                     attributes: ['id', 'conversation_id', 'user_message', 'assistant_reply', 'created_at', 'has_context']
