@@ -24,6 +24,7 @@ const Waitlist = sequelize.define('waitlist', {
     defaultValue: DataTypes.NOW
   }
 }, {
+  tableName: "waitlists",
   timestamps: true,
   createdAt: 'joined_at',
   updatedAt: 'updated_at'

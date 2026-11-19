@@ -11,7 +11,7 @@ test('document retrieval activates review before response and persistence',async
  }}};}}
  const history={count:async()=>0,findAll:async()=>[],create:async data=>{persisted=data;return {...data,id:1,createdAt:new Date()};}};
  const retrieval={assembleAssistantContext:async()=>({contextText:'Invoice total £360. Payment not recorded. No internal assessment.',sourceSummary:{sourceClasses:['uploaded_user_document'],uploadedUserDocuments:1,errors:[]},scope:{}})};
- const sandbox={module:{exports:{}},console,require:name=>{
+ const sandbox={module:{exports:{}},console,process:{env:{}},require:name=>{
   if(name==='openai')return OpenAI;
   if(name==='../../models/index')return {ChatHistory:history,User:{findByPk:async()=>({id:173})}};
   if(name==='sequelize')return {Op:{}};

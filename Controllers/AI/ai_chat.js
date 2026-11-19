@@ -1,8 +1,10 @@
+const manualHandoff = require('../../services/askManualHandoff');
+const { chatPagination } = require('../../utils/chatPagination');
 const { reviewDocumentAnswer } = require('../../services/documentEvidenceReview');
 const OpenAI = require('openai');
 const documentEvidencePolicy = require('../../services/documentEvidencePolicy');
 const { ChatHistory, User, GuestChatSession } = require('../../models/index');
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
 const env = require('../../config/env');
 const VectorStore = require('../../services/vectorStore');
 const UnifiedRetrievalService = require('../../services/unifiedRetrievalService');
@@ -97,6 +99,52 @@ Empathy cues (sprinkle sparingly):
 
 Each conversation is limited to 5 follow-up questions, so make each response count.`
 };
+
+async function answerGuestQuestion(userMessage, currentSessionId) {
+  // Load previous messages for context
+  const previousMessages = await GuestChatSession.findAll({
+    where: { session_id: currentSessionId },
+    order: [['createdAt', 'ASC']]
+  });
+
+  const conversationHistory = previousMessages.flatMap((row) => [
+    { role: 'user', content: row.user_message },
+    { role: 'assistant', content: row.assistant_reply }
+  ]);
+
+  // RAG: search for relevant context (same as authenticated chat)
+  let relevantContext = '';
+  let documentChunks = [];
+  const similarChunks = await VectorStore.searchSimilarChunks(userMessage, 5, 0.7).catch(() => []);
+  if (similarChunks.length > 0) {
+    documentChunks = similarChunks.map((chunk, index) => `[${index + 1}] ${chunk.text}`);
+    relevantContext = documentChunks.join('\n\n');
+    if (relevantContext) {
+      relevantContext += '\n\n**Sources:**\n' + similarChunks.map((c, i) => `[${i + 1}] ${c.metadata?.filename || 'Document'}`).join('\n');
+    }
+  }
+
+  const userMessageWithContext = relevantContext
+    ? `${userMessage}\n\n${relevantContext}`
+    : userMessage;
+
+  const messages = [
+    systemMessage,
+    ...conversationHistory,
+    { role: 'user', content: userMessageWithContext }
+  ];
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages,
+    temperature: 0.7,
+    max_tokens: 1000
+  });
+
+  return response.choices[0].message.content;
+}
+
+const manualHandoffEnabled = process.env.HT356_ASK_MANUAL_HANDOFF === 'true';
 
 const chatController = {
   async handleChat(req, res) {
@@ -202,7 +250,10 @@ const chatController = {
       }
   
       // Parallelize unified retrieval, web search, and saved count fetch (if needed) for better performance
+      const offerManual = manualHandoffEnabled && manualHandoff.isManualRequest(userMessage);
+      const searchWeb = search_web === true && !offerManual;
       const parallelTasks = [
+        offerManual ? UnifiedRetrievalService.actionContext(user_id, selectedPropertyId) :
         UnifiedRetrievalService.assembleAssistantContext({
           query: userMessage,
           userId: user_id,
@@ -224,7 +275,7 @@ const chatController = {
             [err.message]
           );
         }),
-        search_web === true ? WebSearchService.searchWeb(userMessage, 5).catch(err => {
+        searchWeb ? WebSearchService.searchWeb(userMessage, 5).catch(err => {
           console.error('Error performing web search:', err);
           return { sources: [], content: '', hasResults: false };
         }) : Promise.resolve({ sources: [], content: '', hasResults: false })
@@ -291,7 +342,9 @@ const chatController = {
       let assistantReply;
       
       try {
-        if (retrievalContext.sourceSummary.sourceClasses?.includes('uploaded_user_document')) {
+        if (offerManual) {
+          assistantReply = manualHandoff.reply;
+        } else if (retrievalContext.sourceSummary.sourceClasses?.includes('uploaded_user_document')) {
           assistantReply = await reviewDocumentAnswer({ client: openai, model: 'gpt-4o-mini', question: userMessage, context: relevantContext, priorQuestions: previousChats.map(chat => chat.userMessage) });
         } else {
         const response = await openai.chat.completions.create({
@@ -361,6 +414,7 @@ const chatController = {
         success: true,
         message: 'Chat processed successfully',
         data: {
+          ...(manualHandoffEnabled && manualHandoff.offerForStoredReply(savedChat)),
           conversation_id: currentConversationId,
           remainingQuestions: remainingQuestions,
           conversationEnded: isConversationEnded,
@@ -392,7 +446,7 @@ const chatController = {
             errors: retrievalContext.sourceSummary.errors
           },
           webSearch: {
-            performed: search_web === true,
+            performed: searchWeb,
             hasResults: webSearchResults.hasResults,
             sourcesCount: webSearchResults.sources?.length || 0,
             error: webSearchResults.error || null
@@ -523,9 +577,12 @@ const chatController = {
 
   // Updated getUserChatHistory to include saved status
   async getUserChatHistory(req, res) {
+    const paging = chatPagination(req.query);
+    if (!paging) return res.status(400).json({ success: false, message: 'page must be a positive integer and limit must be between 1 and 100' });
     try {
       const user_id = req.user?.id || req.query.user_id;
-      const { conversation_id, page = 1, limit = 20, saved_only = false } = req.query;
+      const { conversation_id, saved_only = false } = req.query;
+      const { page, limit, offset } = paging;
 
       if (!user_id) {
         return res.status(400).json({
@@ -550,11 +607,10 @@ const chatController = {
         whereClause.is_saved = true;
       }
 
-      const offset = (page - 1) * limit;
 
       const { count, rows: chatHistory } = await ChatHistory.findAndCountAll({
         where: whereClause,
-        order: [['createdAt', 'DESC']],
+        order: [['createdAt', 'DESC'], ['id', 'DESC']],
         limit: parseInt(limit),
         offset: offset
       });
@@ -572,7 +628,10 @@ const chatController = {
             is_saved: chat.is_saved
           };
         }
-        conversationGroups[convId].messages.push(chat);
+        conversationGroups[convId].messages.push({
+          ...(chat.toJSON ? chat.toJSON() : chat),
+          ...(manualHandoffEnabled && manualHandoff.offerForStoredReply(chat))
+        });
         conversationGroups[convId].messageCount++;
         conversationGroups[convId].isComplete = conversationGroups[convId].messageCount >= 6;
       });
@@ -601,6 +660,8 @@ const chatController = {
 
   // Alternative approach without sequelize.fn - using raw queries or multiple queries
   async getConversationList(req, res) {
+    const paging = chatPagination(req.query);
+    if (!paging) return res.status(400).json({ success: false, message: 'page must be a positive integer and limit must be between 1 and 100' });
     try {
       const user_id = req.user?.id;
       const { saved_only = false } = req.query;
@@ -612,62 +673,40 @@ const chatController = {
         });
       }
 
-      const whereClause = { user_id: parseInt(user_id) };
-      if (saved_only === 'true') {
-        whereClause.is_saved = true;
-      }
-
-      // Get all messages for the user
-      const allMessages = await ChatHistory.findAll({
-        where: whereClause,
-        order: [['createdAt', 'DESC']]
-      });
-
-      // Group and process conversations manually
-      const conversationMap = new Map();
-      
-      allMessages.forEach(message => {
-        const convId = message.conversation_id;
-        
-        if (!conversationMap.has(convId)) {
-          conversationMap.set(convId, {
-            conversation_id: convId,
-            messages: [],
-            is_saved: message.is_saved,
-            lastMessageAt: message.createdAt,
-            firstMessage: message.userMessage
-          });
-        }
-        
-        const conversation = conversationMap.get(convId);
-        conversation.messages.push(message);
-        
-        // Update last message time if this message is newer
-        if (message.createdAt > conversation.lastMessageAt) {
-          conversation.lastMessageAt = message.createdAt;
-        }
-        
-        // Keep the first message (oldest) as preview
-        if (message.createdAt < new Date(conversation.firstMessage)) {
-          conversation.firstMessage = message.userMessage;
-        }
-      });
-
-      // Convert to array and add computed properties
-      const conversationList = Array.from(conversationMap.values()).map(conv => ({
-        conversation_id: conv.conversation_id,
-        lastMessageAt: conv.lastMessageAt,
-        messageCount: conv.messages.length,
-        isComplete: conv.messages.length >= 6,
-        remainingQuestions: Math.max(0, 6 - conv.messages.length),
-        is_saved: conv.is_saved,
-        preview: conv.firstMessage ? 
-          conv.firstMessage.substring(0, 100) + '...' : 
-          'No messages'
+      const savedOnly = saved_only === 'true';
+      const replacements = { userId: Number(user_id), savedOnly, limit: paging.limit, offset: paging.offset };
+      const groups = await ChatHistory.sequelize.query(`
+        SELECT conversation_id, MAX(createdAt) AS lastMessageAt, COUNT(*) AS messageCount,
+               MIN(id) AS previewId, MAX(id) AS latestId
+        FROM chat_histories
+        WHERE user_id = :userId AND (:savedOnly = false OR is_saved = true)
+        GROUP BY conversation_id
+        ORDER BY lastMessageAt DESC, conversation_id DESC
+        LIMIT :limit OFFSET :offset`, { replacements, type: QueryTypes.SELECT });
+      const [{ totalCount }] = await ChatHistory.sequelize.query(`
+        SELECT COUNT(*) AS totalCount FROM (
+          SELECT conversation_id FROM chat_histories
+          WHERE user_id = :userId AND (:savedOnly = false OR is_saved = true)
+          GROUP BY conversation_id
+        ) conversations`, { replacements, type: QueryTypes.SELECT });
+      // At most two records per displayed conversation, never its entire history.
+      const previewIds = groups.flatMap(group => [group.previewId, group.latestId]);
+      const previews = previewIds.length ? await ChatHistory.findAll({
+        where: { user_id: Number(user_id), id: { [Op.in]: previewIds } },
+        attributes: ['id', 'userMessage', 'is_saved'],
+      }) : [];
+      const byId = new Map(previews.map(row => [Number(row.id), row]));
+      const conversationList = groups.map(group => ({
+        conversation_id: group.conversation_id,
+        lastMessageAt: group.lastMessageAt,
+        messageCount: Number(group.messageCount),
+        isComplete: Number(group.messageCount) >= 6,
+        remainingQuestions: Math.max(0, 6 - Number(group.messageCount)),
+        is_saved: Boolean(byId.get(Number(group.latestId))?.is_saved),
+        preview: byId.get(Number(group.previewId))?.userMessage
+          ? byId.get(Number(group.previewId)).userMessage.substring(0, 100) + '...'
+          : 'No messages',
       }));
-
-      // Sort by last message time (newest first)
-      conversationList.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
 
       // Get saved conversations count
       const savedConversationsCount = await ChatHistory.count({
@@ -684,6 +723,10 @@ const chatController = {
         message: 'Conversation list retrieved successfully',
         data: {
           conversations: conversationList,
+          totalCount: Number(totalCount),
+          currentPage: paging.page,
+          totalPages: Math.ceil(Number(totalCount) / paging.limit),
+          hasMore: paging.offset + groups.length < Number(totalCount),
           savedConversationsCount: savedConversationsCount,
           maxSavedConversations: 3
         }
@@ -727,47 +770,9 @@ const chatController = {
         });
       }
 
-      // Load previous messages for context
-      const previousMessages = await GuestChatSession.findAll({
-        where: { session_id: currentSessionId },
-        order: [['createdAt', 'ASC']]
-      });
-
-      const conversationHistory = previousMessages.flatMap((row) => [
-        { role: 'user', content: row.user_message },
-        { role: 'assistant', content: row.assistant_reply }
-      ]);
-
-      // RAG: search for relevant context (same as authenticated chat)
-      let relevantContext = '';
-      let documentChunks = [];
-      const similarChunks = await VectorStore.searchSimilarChunks(userMessage, 5, 0.7).catch(() => []);
-      if (similarChunks.length > 0) {
-        documentChunks = similarChunks.map((chunk, index) => `[${index + 1}] ${chunk.text}`);
-        relevantContext = documentChunks.join('\n\n');
-        if (relevantContext) {
-          relevantContext += '\n\n**Sources:**\n' + similarChunks.map((c, i) => `[${i + 1}] ${c.metadata?.filename || 'Document'}`).join('\n');
-        }
-      }
-
-      const userMessageWithContext = relevantContext
-        ? `${userMessage}\n\n${relevantContext}`
-        : userMessage;
-
-      const messages = [
-        systemMessage,
-        ...conversationHistory,
-        { role: 'user', content: userMessageWithContext }
-      ];
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages,
-        temperature: 0.7,
-        max_tokens: 1000
-      });
-
-      const assistantReply = response.choices[0].message.content;
+      const assistantReply = manualHandoffEnabled && manualHandoff.isManualRequest(userMessage)
+        ? manualHandoff.reply
+        : await answerGuestQuestion(userMessage, currentSessionId);
 
       // Persist to GuestChatSession
       await GuestChatSession.create({
@@ -783,6 +788,7 @@ const chatController = {
         success: true,
         message: 'Chat processed successfully',
         data: {
+          ...(manualHandoffEnabled && manualHandoff.offerForStoredReply({userMessage, assistantReply})),
           reply: assistantReply,
           session_id: currentSessionId,
           messageCount: newMessageCount,

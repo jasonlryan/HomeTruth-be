@@ -4,7 +4,7 @@ const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 
 class DocumentProcessor {
-  static async processFile(filePath, filename) {
+  static async processFile(filePath, filename = path.basename(filePath)) {
     const fileExt = path.extname(filename).toLowerCase();
     
     try {
@@ -31,7 +31,9 @@ class DocumentProcessor {
   static async processPDF(filePath) {
     try {
       const dataBuffer = fs.readFileSync(filePath);
-      const data = await pdf(dataBuffer);
+      // PDF.js must receive an exact byte view, not a pooled Node Buffer whose backing
+      // ArrayBuffer can include unrelated bytes before/after the uploaded PDF.
+      const data = await pdf(Uint8Array.from(dataBuffer));
       return data.text;
     } catch (error) {
       throw new Error(`Failed to process PDF: ${error.message}`);
