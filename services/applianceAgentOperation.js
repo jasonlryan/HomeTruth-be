@@ -15,10 +15,12 @@ module.exports = function applianceAgentOperation(findManual) {
   return {
     agent: 'appliance-information',
     revision: 1,
+    limits: require('../agent-runtime/manualContract'),
     operation: 'findManual',
     input: Joi.object({ requestKey: Joi.string().guid().required() }),
     output: Joi.object({
       id: identifier.required(),
+      revision: identifier.required(),
       identity: Joi.object({ brand: Joi.string().required(), model: Joi.string().required() }).required(),
       status: Joi.string().valid('running', 'needs_review', 'no_match', 'failed', 'importing', 'saved').required(),
       agent: Joi.string().required(),
@@ -35,8 +37,8 @@ module.exports = function applianceAgentOperation(findManual) {
       documentId: identifier,
       savedCandidateIndex: Joi.number().integer().min(0).max(3)
     }),
-    execute({ principal, homeId, itemId }, input) {
-      return findManual(id(principal), id(homeId), id(itemId), input);
+    execute({ principal, homeId, itemId }, input, entry) {
+      return findManual(id(principal), id(homeId), id(itemId), input, entry);
     }
   };
 };

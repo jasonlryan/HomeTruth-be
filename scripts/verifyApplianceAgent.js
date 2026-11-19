@@ -10,7 +10,9 @@ function setup(){
  const items={async find(){if(denied)throw Object.assign(new Error('denied'),{statusCode:403});return item;}};
  const raw={candidates:[{title:'Official manual',url:'https://www.bosch-home.co.uk/manual-W100.pdf',model:'W100',quote:'Instruction manual for W100',kind:'pdf'}],sourceUrls:['https://www.bosch-home.co.uk/manual-W100.pdf'],limitations:'Check the variant',usage:{modelCalls:2,totalTokens:100}};
  const runtime={async findManual(){calls++;return raw;}};
- const { agents, applianceAgent } = createHomeAgents({items,Run,runtime,async importManual(){imports++;return 8;}});
+ const { agents, applianceAgent } = createHomeAgents({items,Run,runtime,
+   reserve: ({key,identity,execution}) => Run.findOrCreate({where:key, defaults:{status:'running',identity,execution}}),
+   async importManual(){imports++;return 8;}});
  const service = {
    ...applianceAgent,
    start(principal, homeId, itemId, input) {
@@ -149,4 +151,31 @@ test('dispatcher validates registrations and rejects incompatible result contrac
     agent: operation.agent, operation: operation.operation,
     context: { principal: 1, homeId: 2, itemId: 3 }, input: {requestKey: key}
   }), /Invalid result/);
+});
+
+test('policy requires approved positive budgets before enabling and enforces the SDK ceilings', () => {
+  const {readPolicy} = require('../services/agentExecutionPolicy');
+  assert.equal(readPolicy({}).enabled, false);
+  const pilot = readPolicy({APPLIANCE_AGENT_ENABLED:'true'});
+  assert.deepEqual([pilot.currency,pilot.maxConcurrent,pilot.dailyMicros,pilot.lookupMicros],['GBP',1,1000000,200000]);
+  assert.throws(()=>readPolicy({APPLIANCE_AGENT_ENABLED:'true',APPLIANCE_AGENT_DAILY_USD_MICROS:'1000000'}),/legacy USD/);
+  assert.throws(()=>readPolicy({APPLIANCE_AGENT_ENABLED:'yes'}),/ENABLED/);
+  assert.throws(()=>readPolicy({APPLIANCE_AGENT_MAX_TURNS:'5'}),/MAX_TURNS/);
+  assert.throws(()=>readPolicy({APPLIANCE_AGENT_DEADLINE_MS:'0'}),/DEADLINE/);
+  const entry = require('../services/applianceAgentOperation')(async()=>({}));
+  const dispatcher = require('../services/agentDispatcher');
+  assert.throws(()=>dispatcher([{...entry,limits:{...entry.limits,tools:['write_record']}}]),/capabilities/);
+  assert.throws(()=>dispatcher([entry],{'appliance-information/findManual':9}),/Unknown active revision/);
+});
+
+test('provider estimates price cached tokens and web searches independently of market reservations', () => {
+  const cost = require('../agent-runtime/providerCost');
+  const response = {usage:{inputTokens:1000,inputTokensDetails:[{cached_tokens:400}],outputTokens:100,totalTokens:1100},
+    output:[{type:'hosted_tool_call',name:'web_search_call'},{type:'function_call'}]};
+  const priced = cost('gpt-5-mini',[response,response]);
+  assert.equal(priced.currency,'USD');
+  assert.equal(priced.estimatedMicros,20720);
+  assert.equal(priced.searchCalls,2);
+  assert.equal(cost('unpriced-model',[response]).estimatedMicros,null);
+  assert.equal(cost('gpt-5-mini',[]).estimatedMicros,null);
 });

@@ -1,10 +1,11 @@
+const admission = require('./agentRunAdmission');
 const Joi=require('joi');
 const { ItemError,validate,id }=require('./itemContract');
 const { domainsFor,reviewCandidates,assertSameIdentity }=require('./applianceManualPolicy');
 const finders=require('./manufacturerManuals');
-const fresh = run => Date.now()-new Date(run.updatedAt).getTime()<180000;
-module.exports = function({items,Run,runtime,importManual}) {
-  const view=run=>({id:run.id,status:run.status,identity:run.identity,...(run.result||{}),agent:'HomeTruth appliance information agent',updatedAt:run.updatedAt});
+const fresh = run => Date.now()-new Date(run.updatedAt).getTime()<admission.interruptedMs;
+module.exports = function({items,Run,runtime,importManual,policy,reserve = admission.reserve}) {
+  const view=run=>({id:run.id,status:run.status,identity:run.identity,...(run.result||{}),revision:run.execution?.revision ?? 1,agent:'HomeTruth appliance information agent',updatedAt:run.updatedAt});
   async function owned(user,home,itemId,runId) {
     const item=await items.find(user,home,itemId,true);
     const run=await Run.findOne({where:{id:id(runId),item_id:id(itemId),user_id:id(user)}});
@@ -14,7 +15,7 @@ module.exports = function({items,Run,runtime,importManual}) {
   }
   async function recover(run) {
     if(['running','importing'].includes(run.status)&&!fresh(run)) {
-      await Run.update({status:'failed',result:{...(run.result||{}),notice:'This run was interrupted. Your confirmed item details were not changed. Try again.'}},{where:{id:run.id,status:run.status,updatedAt:run.updatedAt}});
+      await Run.update({status:'failed',...(run.status==='running' ? {finished_at:new Date()} : {}),result:{...(run.result||{}),notice:'This run was interrupted. Your confirmed item details were not changed. Try again.'}},{where:{id:run.id,status:run.status,updatedAt:run.updatedAt}});
       return Run.findOne({where:{id:run.id}});
     }
     return run;
@@ -34,26 +35,35 @@ module.exports = function({items,Run,runtime,importManual}) {
       }
       return view(run);
     },
-    async start(user,home,itemId,payload) {
+    async start(user,home,itemId,payload,entry) {
       validate(Joi.object({requestKey:Joi.string().guid().required()}).required(),payload);
       const item=await items.find(user,home,itemId,true);
       const {brand,model}=item.record.identity;
       if(!brand||!model)throw new ItemError('Confirm the brand and complete model first. A label photo or receipt can help.');
-      const [run,created]=await Run.findOrCreate({where:{item_id:id(itemId),user_id:id(user),request_key:payload.requestKey},defaults:{status:'running',identity:{brand,model}}});
+      const fallback = finders(brand, model);
+      const domains = domainsFor(brand);
+      const [run, created] = await reserve({
+        Run, policy, key: {item_id:id(itemId),user_id:id(user),request_key:payload.requestKey},
+        identity: { brand, model }, paid: domains.length > 0,
+        execution: admission.identityFor(user, home, itemId, brand, model, entry)
+      });
       assertSameIdentity(item,run.identity);
       if(!created)return view(await recover(run));
       // Recovery may claim the run before the provider finishes.
-      const finish = values => Run.update(values, { where: { id: run.id, status: 'running' } });
+      let usage = null;
+      const finish = values => Run.update({ ...values, finished_at: new Date(), usage }, { where: { id: run.id, status: 'running' } });
       const currentView = async () => view((await owned(user, home, itemId, run.id)).run);
-      const fallback=finders(brand,model),domains=domainsFor(brand);
       try {
         if(!domains.length){await finish({status:'no_match',result:{...fallback,candidates:[],notice:'Automatic manufacturer lookup is not available for this brand yet. Use the model search or attach your manual.'}});return currentView();}
-        const raw=await runtime.findManual({brand,model,domains,officialFinder:fallback.officialFinder});
+        const raw=await runtime.findManual({brand,model,domains,officialFinder:fallback.officialFinder,
+          limits: entry.limits, signal: AbortSignal.timeout(entry.limits.deadlineMs)});
+        usage = raw.providerCost ? { ...raw.usage, providerCost: raw.providerCost } : raw.usage ?? null;
         // Re-authorise after the paid run and reject results if this physical item's identity changed.
         assertSameIdentity(await items.find(user,home,itemId,true),run.identity);
         const candidates=reviewCandidates(raw,brand,model);
         await finish({status:candidates.length?'needs_review':'no_match',result:{...fallback,candidates,usage:raw.usage,limitations:String(raw.limitations||'').slice(0,700),notice:candidates.length?'Review the complete model before saving a manual. A cited page is not yet an attached manual.':'No exact-model official manual could be established. Try the manufacturer finder or attach your copy.'}});
       } catch(e) {
+        if (e.providerCost) usage = { providerCost: e.providerCost };
         await finish({status:'failed',result:{...fallback,candidates:[],notice:'The agent could not finish this lookup. Your saved item is unchanged. Try again or use the manufacturer finder.'}});
         if([403,404,409].includes(e.statusCode))throw e;
       }
@@ -70,13 +80,13 @@ module.exports = function({items,Run,runtime,importManual}) {
       if(!changed)throw new ItemError('This manual is already being saved. Reload the result.',409);
       try {
         const documentId=await importManual({user,home,itemId,identity:run.identity,candidate,runId:run.id});
-        await run.update({status:'saved',result:{...run.result,documentId,savedCandidateIndex:payload.candidateIndex,notice:'The manual is saved with this item and available for source-based questions.'}});
+        await Run.update({status:'saved',result:{...run.result,documentId,savedCandidateIndex:payload.candidateIndex,notice:'The manual is saved with this item and available for source-based questions.'}}, {where:{id:run.id,status:'importing'}});
       } catch(e) {
-        await run.update({status:'needs_review'});
+        await Run.update({status:'needs_review'},{where:{id:run.id,status:'importing'}});
         if(e instanceof ItemError)throw e;
         throw new ItemError('The manual could not be saved. Your confirmed item details are unchanged. Open the source or try again.',502);
       }
-      return view(run);
+      return view((await owned(user,home,itemId,run.id)).run);
     }
   };
 };
