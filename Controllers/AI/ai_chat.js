@@ -1,3 +1,4 @@
+const manualHandoff = require('../../services/askManualHandoff');
 const { chatPagination } = require('../../utils/chatPagination');
 const { reviewDocumentAnswer } = require('../../services/documentEvidenceReview');
 const OpenAI = require('openai');
@@ -98,6 +99,50 @@ Empathy cues (sprinkle sparingly):
 
 Each conversation is limited to 5 follow-up questions, so make each response count.`
 };
+
+async function answerGuestQuestion(userMessage, currentSessionId) {
+  // Load previous messages for context
+  const previousMessages = await GuestChatSession.findAll({
+    where: { session_id: currentSessionId },
+    order: [['createdAt', 'ASC']]
+  });
+
+  const conversationHistory = previousMessages.flatMap((row) => [
+    { role: 'user', content: row.user_message },
+    { role: 'assistant', content: row.assistant_reply }
+  ]);
+
+  // RAG: search for relevant context (same as authenticated chat)
+  let relevantContext = '';
+  let documentChunks = [];
+  const similarChunks = await VectorStore.searchSimilarChunks(userMessage, 5, 0.7).catch(() => []);
+  if (similarChunks.length > 0) {
+    documentChunks = similarChunks.map((chunk, index) => `[${index + 1}] ${chunk.text}`);
+    relevantContext = documentChunks.join('\n\n');
+    if (relevantContext) {
+      relevantContext += '\n\n**Sources:**\n' + similarChunks.map((c, i) => `[${i + 1}] ${c.metadata?.filename || 'Document'}`).join('\n');
+    }
+  }
+
+  const userMessageWithContext = relevantContext
+    ? `${userMessage}\n\n${relevantContext}`
+    : userMessage;
+
+  const messages = [
+    systemMessage,
+    ...conversationHistory,
+    { role: 'user', content: userMessageWithContext }
+  ];
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages,
+    temperature: 0.7,
+    max_tokens: 1000
+  });
+
+  return response.choices[0].message.content;
+}
 
 const chatController = {
   async handleChat(req, res) {
@@ -203,7 +248,10 @@ const chatController = {
       }
   
       // Parallelize unified retrieval, web search, and saved count fetch (if needed) for better performance
+      const offerManual = manualHandoff.isManualRequest(userMessage);
+      const searchWeb = search_web === true && !offerManual;
       const parallelTasks = [
+        offerManual ? UnifiedRetrievalService.actionContext(user_id, selectedPropertyId) :
         UnifiedRetrievalService.assembleAssistantContext({
           query: userMessage,
           userId: user_id,
@@ -225,7 +273,7 @@ const chatController = {
             [err.message]
           );
         }),
-        search_web === true ? WebSearchService.searchWeb(userMessage, 5).catch(err => {
+        searchWeb ? WebSearchService.searchWeb(userMessage, 5).catch(err => {
           console.error('Error performing web search:', err);
           return { sources: [], content: '', hasResults: false };
         }) : Promise.resolve({ sources: [], content: '', hasResults: false })
@@ -292,7 +340,9 @@ const chatController = {
       let assistantReply;
       
       try {
-        if (retrievalContext.sourceSummary.sourceClasses?.includes('uploaded_user_document')) {
+        if (offerManual) {
+          assistantReply = manualHandoff.reply;
+        } else if (retrievalContext.sourceSummary.sourceClasses?.includes('uploaded_user_document')) {
           assistantReply = await reviewDocumentAnswer({ client: openai, model: 'gpt-4o-mini', question: userMessage, context: relevantContext, priorQuestions: previousChats.map(chat => chat.userMessage) });
         } else {
         const response = await openai.chat.completions.create({
@@ -362,6 +412,7 @@ const chatController = {
         success: true,
         message: 'Chat processed successfully',
         data: {
+          ...manualHandoff.offerForStoredReply(savedChat),
           conversation_id: currentConversationId,
           remainingQuestions: remainingQuestions,
           conversationEnded: isConversationEnded,
@@ -393,7 +444,7 @@ const chatController = {
             errors: retrievalContext.sourceSummary.errors
           },
           webSearch: {
-            performed: search_web === true,
+            performed: searchWeb,
             hasResults: webSearchResults.hasResults,
             sourcesCount: webSearchResults.sources?.length || 0,
             error: webSearchResults.error || null
@@ -575,7 +626,10 @@ const chatController = {
             is_saved: chat.is_saved
           };
         }
-        conversationGroups[convId].messages.push(chat);
+        conversationGroups[convId].messages.push({
+          ...(chat.toJSON ? chat.toJSON() : chat),
+          ...manualHandoff.offerForStoredReply(chat)
+        });
         conversationGroups[convId].messageCount++;
         conversationGroups[convId].isComplete = conversationGroups[convId].messageCount >= 6;
       });
@@ -714,47 +768,9 @@ const chatController = {
         });
       }
 
-      // Load previous messages for context
-      const previousMessages = await GuestChatSession.findAll({
-        where: { session_id: currentSessionId },
-        order: [['createdAt', 'ASC']]
-      });
-
-      const conversationHistory = previousMessages.flatMap((row) => [
-        { role: 'user', content: row.user_message },
-        { role: 'assistant', content: row.assistant_reply }
-      ]);
-
-      // RAG: search for relevant context (same as authenticated chat)
-      let relevantContext = '';
-      let documentChunks = [];
-      const similarChunks = await VectorStore.searchSimilarChunks(userMessage, 5, 0.7).catch(() => []);
-      if (similarChunks.length > 0) {
-        documentChunks = similarChunks.map((chunk, index) => `[${index + 1}] ${chunk.text}`);
-        relevantContext = documentChunks.join('\n\n');
-        if (relevantContext) {
-          relevantContext += '\n\n**Sources:**\n' + similarChunks.map((c, i) => `[${i + 1}] ${c.metadata?.filename || 'Document'}`).join('\n');
-        }
-      }
-
-      const userMessageWithContext = relevantContext
-        ? `${userMessage}\n\n${relevantContext}`
-        : userMessage;
-
-      const messages = [
-        systemMessage,
-        ...conversationHistory,
-        { role: 'user', content: userMessageWithContext }
-      ];
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages,
-        temperature: 0.7,
-        max_tokens: 1000
-      });
-
-      const assistantReply = response.choices[0].message.content;
+      const assistantReply = manualHandoff.isManualRequest(userMessage)
+        ? manualHandoff.reply
+        : await answerGuestQuestion(userMessage, currentSessionId);
 
       // Persist to GuestChatSession
       await GuestChatSession.create({
@@ -770,6 +786,7 @@ const chatController = {
         success: true,
         message: 'Chat processed successfully',
         data: {
+          ...manualHandoff.offerForStoredReply({userMessage, assistantReply}),
           reply: assistantReply,
           session_id: currentSessionId,
           messageCount: newMessageCount,
