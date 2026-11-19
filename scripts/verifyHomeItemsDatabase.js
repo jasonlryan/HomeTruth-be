@@ -58,15 +58,19 @@ async function main() {
     const AgentRun=require('../models/applianceAgentRun');
     const agentItem=await s.create(1,42,{requestKey:require('crypto').randomUUID(),record:{...record,identity:{brand:'Bosch',model:'W100',method:'manual'}}});
     let searches=0;
-    const makeAgent=()=>require('../services/applianceAgentService')({items:s,Run:AgentRun,runtime:{async findManual(){searches++;return {candidates:[{title:'Manufacturer manual',url:'https://bosch-home.co.uk/test-W100.pdf',model:'W100',quote:'W100 instructions'}],sourceUrls:['https://bosch-home.co.uk/test-W100.pdf']};}},async importManual(){return 5;}});
+    const makeAgent=()=>require('../services/homeAgents')({items:s,Run:AgentRun,runtime:{async findManual(){searches++;return {candidates:[{title:'Manufacturer manual',url:'https://bosch-home.co.uk/test-W100.pdf',model:'W100',quote:'W100 instructions'}],sourceUrls:['https://bosch-home.co.uk/test-W100.pdf']};}},async importManual(){return 5;}});
     const runKey={requestKey:require('crypto').randomUUID()};
-    const [runA,runB]=await Promise.all([makeAgent().start(1,42,agentItem.id,runKey),makeAgent().start(1,42,agentItem.id,runKey)]);
+    const lookup = () => makeAgent().agents.invoke({
+      agent: 'appliance-information', operation: 'findManual',
+      context: { principal: 1, homeId: 42, itemId: agentItem.id }, input: runKey
+    });
+    const [runA,runB]=await Promise.all([lookup(),lookup()]);
     assert.equal(runA.id,runB.id);assert.equal(searches,1);
-    assert.equal((await makeAgent().latest(1,42,agentItem.id)).status,'needs_review');
-    await assert.rejects(makeAgent().latest(2,42,agentItem.id),e=>e.statusCode===403);
-    const saved=await makeAgent().saveManual(1,42,agentItem.id,runA.id,{candidateIndex:0,confirmed:true});assert.equal(saved.status,'saved');
+    assert.equal((await makeAgent().applianceAgent.latest(1,42,agentItem.id)).status,'needs_review');
+    await assert.rejects(makeAgent().applianceAgent.latest(2,42,agentItem.id),e=>e.statusCode===403);
+    const saved=await makeAgent().applianceAgent.saveManual(1,42,agentItem.id,runA.id,{candidateIndex:0,confirmed:true});assert.equal(saved.status,'saved');
     // A removed association must not keep reporting the manual as saved.
-    assert.equal((await makeAgent().latest(1,42,agentItem.id)).status,'needs_review');
+    assert.equal((await makeAgent().applianceAgent.latest(1,42,agentItem.id)).status,'needs_review');
     await s.update(1,42,agentItem.id,{version:1,archived:true});
     const updates=await Promise.allSettled([s.update(1,42,row.id,{version:1,record:{...record,name:'First save'}}),s.update(1,42,row.id,{version:1,record:{...record,name:'Second save'}})]);
     assert.equal(updates.filter(r=>r.status==='fulfilled').length,1);assert.equal(updates.find(r=>r.status==='rejected').reason.statusCode,409);

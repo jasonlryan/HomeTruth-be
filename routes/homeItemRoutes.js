@@ -148,14 +148,19 @@ router.get('/items/:itemId/evidence/:evidenceId/file', async (req, res) => {
     });
   }
 });
-const applianceAgent = require('../services/applianceAgentService')({
+const { applianceAgent, agents } = require('../services/homeAgents')({
   items: service,
   Run: require('../models/applianceAgentRun'),
   runtime: intelligence.applianceRuntime,
   importManual: require('../services/importApplianceManual')({items:service,Document:models.UserDocument,vectorService:require('../services/userDocumentVectorService')})
 });
 router.get('/items/:itemId/agent/latest', route(r => applianceAgent.latest(r.user.id,r.params.propertyId,r.params.itemId)));
-router.post('/items/:itemId/manual-search', costly, route(r => applianceAgent.start(r.user.id,r.params.propertyId,r.params.itemId,r.body)));
+router.post('/items/:itemId/manual-search', costly, route(r => agents.invoke({
+  agent: 'appliance-information',
+  operation: 'findManual',
+  context: { principal: r.user.id, homeId: r.params.propertyId, itemId: r.params.itemId },
+  input: r.body
+})));
 router.post('/items/:itemId/agent/:runId/save-manual', costly, route(r => applianceAgent.saveManual(r.user.id,r.params.propertyId,r.params.itemId,r.params.runId,r.body)));
 router.post('/items/:itemId/ask', costly, route(async r => {
   validate(Joi.object({

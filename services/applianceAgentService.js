@@ -42,19 +42,22 @@ module.exports = function({items,Run,runtime,importManual}) {
       const [run,created]=await Run.findOrCreate({where:{item_id:id(itemId),user_id:id(user),request_key:payload.requestKey},defaults:{status:'running',identity:{brand,model}}});
       assertSameIdentity(item,run.identity);
       if(!created)return view(await recover(run));
+      // Recovery may claim the run before the provider finishes.
+      const finish = values => Run.update(values, { where: { id: run.id, status: 'running' } });
+      const currentView = async () => view((await owned(user, home, itemId, run.id)).run);
       const fallback=finders(brand,model),domains=domainsFor(brand);
       try {
-        if(!domains.length){await run.update({status:'no_match',result:{...fallback,candidates:[],notice:'Automatic manufacturer lookup is not available for this brand yet. Use the model search or attach your manual.'}});return view(run);}
+        if(!domains.length){await finish({status:'no_match',result:{...fallback,candidates:[],notice:'Automatic manufacturer lookup is not available for this brand yet. Use the model search or attach your manual.'}});return currentView();}
         const raw=await runtime.findManual({brand,model,domains,officialFinder:fallback.officialFinder});
         // Re-authorise after the paid run and reject results if this physical item's identity changed.
         assertSameIdentity(await items.find(user,home,itemId,true),run.identity);
         const candidates=reviewCandidates(raw,brand,model);
-        await run.update({status:candidates.length?'needs_review':'no_match',result:{...fallback,candidates,usage:raw.usage,limitations:String(raw.limitations||'').slice(0,700),notice:candidates.length?'Review the complete model before saving a manual. A cited page is not yet an attached manual.':'No exact-model official manual could be established. Try the manufacturer finder or attach your copy.'}});
+        await finish({status:candidates.length?'needs_review':'no_match',result:{...fallback,candidates,usage:raw.usage,limitations:String(raw.limitations||'').slice(0,700),notice:candidates.length?'Review the complete model before saving a manual. A cited page is not yet an attached manual.':'No exact-model official manual could be established. Try the manufacturer finder or attach your copy.'}});
       } catch(e) {
-        await run.update({status:'failed',result:{...fallback,candidates:[],notice:'The agent could not finish this lookup. Your saved item is unchanged. Try again or use the manufacturer finder.'}});
+        await finish({status:'failed',result:{...fallback,candidates:[],notice:'The agent could not finish this lookup. Your saved item is unchanged. Try again or use the manufacturer finder.'}});
         if([403,404,409].includes(e.statusCode))throw e;
       }
-      return view(run);
+      return currentView();
     },
     async saveManual(user,home,itemId,runId,payload) {
       validate(Joi.object({candidateIndex:Joi.number().integer().min(0).max(3).required(),confirmed:Joi.valid(true).required()}).required(),payload);

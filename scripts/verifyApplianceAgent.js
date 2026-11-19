@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const create=require('../services/applianceAgentService');
+const createHomeAgents = require('../services/homeAgents');
 const {domainsFor,officialURL,containsModel,reviewCandidates}=require('../services/applianceManualPolicy');
 const {publicAddress}=require('../services/applianceManualDownload');
 function setup(){
@@ -10,8 +10,14 @@ function setup(){
  const items={async find(){if(denied)throw Object.assign(new Error('denied'),{statusCode:403});return item;}};
  const raw={candidates:[{title:'Official manual',url:'https://www.bosch-home.co.uk/manual-W100.pdf',model:'W100',quote:'Instruction manual for W100',kind:'pdf'}],sourceUrls:['https://www.bosch-home.co.uk/manual-W100.pdf'],limitations:'Check the variant',usage:{modelCalls:2,totalTokens:100}};
  const runtime={async findManual(){calls++;return raw;}};
- const service=create({items,Run,runtime,async importManual(){imports++;return 8;}});
- return{service,item,rows,raw,runtime,get calls(){return calls;},get imports(){return imports;},deny(){denied=true;}};
+ const { agents, applianceAgent } = createHomeAgents({items,Run,runtime,async importManual(){imports++;return 8;}});
+ const service = {
+   ...applianceAgent,
+   start(principal, homeId, itemId, input) {
+     return agents.invoke({agent:'appliance-information', operation:'findManual', context:{principal, homeId, itemId}, input});
+   }
+ };
+ return{service,agents,item,rows,raw,runtime,get calls(){return calls;},get imports(){return imports;},deny(){denied=true;}};
 }
 const key='e99d6b94-a656-4591-b78f-cdeab470c315';
 test('manufacturer URLs and exact model boundaries fail closed',()=>{
@@ -94,4 +100,53 @@ test('source answers restore original passages from IDs and discard invented IDs
  for(const p of passagesFor('First source span.\n\n[Another selected passage]\n\nLater source span.'))assert.ok(!p.text.includes('[Another selected passage]'));
  const answer=restoreStatements({statements:[{answer:'Use a brush.',sourceId:1,passageId:1},{answer:'Invented',sourceId:1,passageId:999}],limitations:''},[{id:1,passages}]);
  assert.equal(answer.statements.length,1);assert.equal(answer.statements[0].quote,passages[1].text);assert.ok(text.includes(answer.statements[0].quote));
+});
+
+test('dispatch rejects unknown operations and client-supplied authority before lookup', async () => {
+  const f = setup();
+  const call = { agent: 'appliance-information', operation: 'findManual', context: { principal: 1, homeId: '2', itemId: '3' }, input: { requestKey: key } };
+  await assert.rejects(f.agents.invoke({ ...call, operation: 'saveManual' }), /Unknown agent operation/);
+  await assert.rejects(f.agents.invoke({ ...call, input: { requestKey: key, homeId: 9 } }), { statusCode: 400 });
+  await assert.rejects(f.agents.invoke({ ...call, input: undefined }), { statusCode: 400 });
+  assert.equal(f.rows.length, 0);
+  assert.equal(f.calls, 0);
+  assert.equal((await f.agents.invoke(call)).status, 'needs_review');
+});
+
+test('late lookup cannot overwrite interrupted recovery or issue another lookup on replay', async () => {
+  const f = setup();
+  let searches = 0;
+  let release, entered;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  f.runtime.findManual = async () => { searches++; entered(); await blocked; return f.raw; };
+  const pending = f.service.start(1, 2, 3, { requestKey: key });
+  await started;
+  assert.equal((await f.service.start(1, 2, 3, { requestKey: key })).status, 'running');
+  f.rows[0].updatedAt = new Date(0);
+  assert.equal((await f.service.latest(1, 2, 3)).status, 'failed');
+  release();
+  const result = await pending;
+  assert.equal(result.status, 'failed');
+  assert.equal(result.candidates, undefined);
+  assert.match(result.notice, /interrupted/);
+  assert.equal(searches, 1);
+});
+
+test('access revoked during paid work suppresses candidates', async () => {
+  const f = setup();
+  f.runtime.findManual = async () => { f.deny(); return f.raw; };
+  await assert.rejects(f.service.start(1, 2, 3, { requestKey: key }), { statusCode: 403 });
+  assert.deepEqual(f.rows[0].result.candidates, []);
+});
+
+test('dispatcher validates registrations and rejects incompatible result contracts', async () => {
+  const createDispatcher = require('../services/agentDispatcher');
+  const operation = require('../services/applianceAgentOperation')(async () => ({ status: 'ok' }));
+  assert.throws(() => createDispatcher([operation, operation]), /Duplicate/);
+  assert.throws(() => createDispatcher([{ ...operation, output: undefined }]), /Invalid agent operation/);
+  await assert.rejects(createDispatcher([operation]).invoke({
+    agent: operation.agent, operation: operation.operation,
+    context: { principal: 1, homeId: 2, itemId: 3 }, input: {requestKey: key}
+  }), /Invalid result/);
 });
