@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const { isManualRequest } = require('../services/askManualHandoff');
 
 test('recognises locating a manual and keeps content questions conversational', () => {
-  for (const question of ['Can you find the manual for my washing machine?', 'Do you have my washer manual?',
+  for (const question of ['get me my washing machine manual', 'Can you find the manual for my washing machine?', 'Do you have my washer manual?',
     'Where can I find the user guide?', 'I can’t find my dishwasher manual', 'Please get the manufacturer’s manual']) {
     assert.equal(isManualRequest(question), true, question);
   }
@@ -37,7 +37,7 @@ test('guest and signed-in Ask offer the same navigation action without search or
     }}
   };
   const base = path.resolve(__dirname,'../Controllers/AI');
-  const sandbox = {module:{exports:{}},console, require:name => dependencies[name] ?? require(path.resolve(base,name))};
+  const sandbox = {module:{exports:{}},console,process:{env:{HT356_ASK_MANUAL_HANDOFF:'true'}}, require:name => dependencies[name] ?? require(path.resolve(base,name))};
   vm.runInNewContext(fs.readFileSync(path.join(base,'ai_chat.js'),'utf8'),sandbox);
   const api = sandbox.module.exports;
   const request = async (handler, req, status) => {

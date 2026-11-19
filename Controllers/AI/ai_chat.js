@@ -144,6 +144,8 @@ async function answerGuestQuestion(userMessage, currentSessionId) {
   return response.choices[0].message.content;
 }
 
+const manualHandoffEnabled = process.env.HT356_ASK_MANUAL_HANDOFF === 'true';
+
 const chatController = {
   async handleChat(req, res) {
     try {
@@ -248,7 +250,7 @@ const chatController = {
       }
   
       // Parallelize unified retrieval, web search, and saved count fetch (if needed) for better performance
-      const offerManual = manualHandoff.isManualRequest(userMessage);
+      const offerManual = manualHandoffEnabled && manualHandoff.isManualRequest(userMessage);
       const searchWeb = search_web === true && !offerManual;
       const parallelTasks = [
         offerManual ? UnifiedRetrievalService.actionContext(user_id, selectedPropertyId) :
@@ -412,7 +414,7 @@ const chatController = {
         success: true,
         message: 'Chat processed successfully',
         data: {
-          ...manualHandoff.offerForStoredReply(savedChat),
+          ...(manualHandoffEnabled && manualHandoff.offerForStoredReply(savedChat)),
           conversation_id: currentConversationId,
           remainingQuestions: remainingQuestions,
           conversationEnded: isConversationEnded,
@@ -628,7 +630,7 @@ const chatController = {
         }
         conversationGroups[convId].messages.push({
           ...(chat.toJSON ? chat.toJSON() : chat),
-          ...manualHandoff.offerForStoredReply(chat)
+          ...(manualHandoffEnabled && manualHandoff.offerForStoredReply(chat))
         });
         conversationGroups[convId].messageCount++;
         conversationGroups[convId].isComplete = conversationGroups[convId].messageCount >= 6;
@@ -768,7 +770,7 @@ const chatController = {
         });
       }
 
-      const assistantReply = manualHandoff.isManualRequest(userMessage)
+      const assistantReply = manualHandoffEnabled && manualHandoff.isManualRequest(userMessage)
         ? manualHandoff.reply
         : await answerGuestQuestion(userMessage, currentSessionId);
 
@@ -786,7 +788,7 @@ const chatController = {
         success: true,
         message: 'Chat processed successfully',
         data: {
-          ...manualHandoff.offerForStoredReply({userMessage, assistantReply}),
+          ...(manualHandoffEnabled && manualHandoff.offerForStoredReply({userMessage, assistantReply})),
           reply: assistantReply,
           session_id: currentSessionId,
           messageCount: newMessageCount,
