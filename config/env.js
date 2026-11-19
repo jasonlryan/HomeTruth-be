@@ -1,8 +1,5 @@
 const { default: OpenAI } = require('openai');
-const path = require('path');
-
-const envFile = process.env.APP_ENV === 'staging' ? '.env_staging' : '.env';
-require('dotenv').config({ path: path.join(__dirname, '..', envFile) });
+require('./loadLocalEnvironment');
 
 const requiredEnvVars = [
   "PORT",

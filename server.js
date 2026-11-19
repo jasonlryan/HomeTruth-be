@@ -21,7 +21,7 @@ const { initializeQdrant, initializeUserDocumentsCollection, checkQdrantConnecti
 app.use(
   cors({
   
-    origin: ["http://localhost:3000","http://localhost:8007","https://b8299deae6d9.ngrok-free.app","https://hometruth.ohtplayground.com", "http://3.141.227.135:8007","https://hometruth.io"],
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
 
 
   credentials: true,
