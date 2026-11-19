@@ -1,5 +1,9 @@
-// Prices are operator-approved reservation amounts in millionths of a USD.
-// They are an internal spend allocation, independent of provider invoice settlement.
+// Reservations are integer millionths of the selected market currency.
+const markets = new Map([
+  ['GBP', { active: true, maxConcurrent: 1, dailyMicros: 1000000, lookupMicros: 200000 }],
+  ['EUR', { active: false }],
+  ['USD', { active: false }]
+]);
 function positive(env, name, maximum = Number.MAX_SAFE_INTEGER) {
   const value = Number(env[name]);
   if (!/^[1-9]\d*$/.test(String(env[name])) || !Number.isSafeInteger(value) || value > maximum) {
@@ -20,11 +24,23 @@ function readPolicy(env = process.env) {
   })) {
     if (env[name] !== undefined) limits[field] = positive(env, name, maximum[field]);
   }
-  if (enabled === 'false') return { enabled: false, revision, limits };
-  const maxConcurrent = positive(env, 'APPLIANCE_AGENT_MAX_CONCURRENT');
-  const dailyMicros = positive(env, 'APPLIANCE_AGENT_DAILY_USD_MICROS');
-  const lookupMicros = positive(env, 'APPLIANCE_AGENT_LOOKUP_USD_MICROS', dailyMicros);
-  return { enabled: true, revision, limits, maxConcurrent, dailyMicros, lookupMicros };
+  const currency = env.APPLIANCE_AGENT_BUDGET_CURRENCY ?? 'GBP';
+  const market = markets.get(currency);
+  if (!market) throw new Error('Unsupported appliance budget currency');
+  if (enabled === 'false' || !market.active) return { enabled: false, currency, revision, limits };
+  if (env.APPLIANCE_AGENT_DAILY_USD_MICROS || env.APPLIANCE_AGENT_LOOKUP_USD_MICROS) {
+    throw new Error('Remove legacy USD budget settings before enabling the UK pilot.');
+  }
+  const config = {
+    APPLIANCE_AGENT_MAX_CONCURRENT: market.maxConcurrent,
+    APPLIANCE_AGENT_DAILY_MICROS: market.dailyMicros,
+    APPLIANCE_AGENT_LOOKUP_MICROS: market.lookupMicros,
+    ...env
+  };
+  const maxConcurrent = positive(config, 'APPLIANCE_AGENT_MAX_CONCURRENT', market.maxConcurrent);
+  const dailyMicros = positive(config, 'APPLIANCE_AGENT_DAILY_MICROS', market.dailyMicros);
+  const lookupMicros = positive(config, 'APPLIANCE_AGENT_LOOKUP_MICROS', dailyMicros);
+  return { enabled: true, currency, revision, limits, maxConcurrent, dailyMicros, lookupMicros };
 }
 
 module.exports = { readPolicy };

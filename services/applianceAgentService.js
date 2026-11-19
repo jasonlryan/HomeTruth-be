@@ -57,12 +57,13 @@ module.exports = function({items,Run,runtime,importManual,policy,reserve = admis
         if(!domains.length){await finish({status:'no_match',result:{...fallback,candidates:[],notice:'Automatic manufacturer lookup is not available for this brand yet. Use the model search or attach your manual.'}});return currentView();}
         const raw=await runtime.findManual({brand,model,domains,officialFinder:fallback.officialFinder,
           limits: entry.limits, signal: AbortSignal.timeout(entry.limits.deadlineMs)});
-        usage = raw.usage ?? null;
+        usage = raw.providerCost ? { ...raw.usage, providerCost: raw.providerCost } : raw.usage ?? null;
         // Re-authorise after the paid run and reject results if this physical item's identity changed.
         assertSameIdentity(await items.find(user,home,itemId,true),run.identity);
         const candidates=reviewCandidates(raw,brand,model);
         await finish({status:candidates.length?'needs_review':'no_match',result:{...fallback,candidates,usage:raw.usage,limitations:String(raw.limitations||'').slice(0,700),notice:candidates.length?'Review the complete model before saving a manual. A cited page is not yet an attached manual.':'No exact-model official manual could be established. Try the manufacturer finder or attach your copy.'}});
       } catch(e) {
+        if (e.providerCost) usage = { providerCost: e.providerCost };
         await finish({status:'failed',result:{...fallback,candidates:[],notice:'The agent could not finish this lookup. Your saved item is unchanged. Try again or use the manufacturer finder.'}});
         if([403,404,409].includes(e.statusCode))throw e;
       }

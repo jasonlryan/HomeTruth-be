@@ -11,7 +11,10 @@ module.exports = async function verifyAdmission({ db, Run, itemId, items, policy
     agent: 'appliance-information', operation: 'findManual', context: { principal, homeId, itemId }, input: { requestKey }
   });
   const maxOne = { ...policyEnv, APPLIANCE_AGENT_MAX_CONCURRENT:'1' };
-  const result = { candidates:[], sourceUrls:[], usage:{modelCalls:1,totalTokens:19} };
+  const providerCost = require('../agent-runtime/providerCost')('gpt-5-mini', [{
+    usage:{inputTokens:15,outputTokens:4,totalTokens:19},output:[{type:'hosted_tool_call',name:'web_search_call'}]
+  }]);
+  const result = { candidates:[], sourceUrls:[], usage:{modelCalls:1,totalTokens:19}, providerCost };
   let entered, finish;
   const started = new Promise(resolve => { entered = resolve; });
   const held = new Promise(resolve => { finish = resolve; });
@@ -34,10 +37,21 @@ module.exports = async function verifyAdmission({ db, Run, itemId, items, policy
   assert.equal(row.execution.fingerprint.length,64);
   assert.equal(row.execution.revision,1);
   assert.ok(row.finished_at);
-  assert.deepEqual(row.usage,result.usage);
+  assert.deepEqual(row.usage,{...result.usage,providerCost});
+  assert.equal(row.usage.providerCost.currency,'USD');
+  assert.equal(completed.usage.providerCost,undefined);
   const disabled = make({}, async()=>{ throw Error('unexpected paid call'); });
   assert.equal((await call(disabled.agents,key)).id,row.id);
   await assert.rejects(call(disabled.agents,randomUUID()), {statusCode:503});
+  for (const currency of ['EUR', 'USD']) {
+    const inactive = make({...policyEnv, APPLIANCE_AGENT_BUDGET_CURRENCY:currency}, async()=>result);
+    assert.equal((await call(inactive.agents,key)).id,row.id);
+    await assert.rejects(call(inactive.agents,randomUUID()),{statusCode:503});
+  }
+  assert.equal(row.execution.currency,'GBP');
+  await db.query("UPDATE agent_daily_spend SET currency='USD' WHERE user_id=1");
+  await assert.rejects(call(other.agents,randomUUID()),/assigned to another currency/);
+  await db.query("UPDATE agent_daily_spend SET currency='GBP' WHERE user_id=1");
   const changed = make(maxOne,async()=>result,{find:async()=>({record:{identity:{brand:'Bosch',model:'changed'}}})});
   await assert.rejects(call(changed.agents,key),{statusCode:409});
 
@@ -49,6 +63,9 @@ module.exports = async function verifyAdmission({ db, Run, itemId, items, policy
   assert.equal((await call(revisions(1),rollbackKey)).revision,2);
   assert.equal((await call(revisions(1),randomUUID())).revision,1);
 
+  await db.query("UPDATE appliance_agent_runs SET execution=JSON_REMOVE(execution,'$.currency') WHERE id=:id",{replacements:{id:row.id}});
+  await require('../migrations/20261119130000-agent-budget-currency').up(db.getQueryInterface(),require('sequelize'));
+  assert.equal((await Run.findByPk(row.id)).execution.currency,'USD');
   const legacyKey = randomUUID();
   await Run.create({user_id:principal,item_id:itemId,request_key:legacyKey,status:'no_match',identity:row.identity});
   assert.equal((await call(disabled.agents,legacyKey)).revision,1);
@@ -61,7 +78,7 @@ module.exports = async function verifyAdmission({ db, Run, itemId, items, policy
   await assert.rejects(call(revocation.agents,revokedKey),{statusCode:403});
   const revoked = await Run.findOne({where:{request_key:revokedKey}});
   assert.equal(revoked.status,'failed');
-  assert.deepEqual(revoked.usage,result.usage);
+  assert.deepEqual(revoked.usage,{...result.usage,providerCost});
 
   const timeout = make({...maxOne,APPLIANCE_AGENT_DEADLINE_MS:'20'},({signal}) => new Promise((resolve,reject) => {
     signal.addEventListener('abort',()=>reject(signal.reason),{once:true});
@@ -70,7 +87,7 @@ module.exports = async function verifyAdmission({ db, Run, itemId, items, policy
   assert.equal((await call(other.agents,randomUUID())).status,'no_match');
 
   const [[{ spent }]] = await db.query('SELECT SUM(reserved_micros) AS spent FROM agent_daily_spend');
-  const lastCharge = make({...maxOne, APPLIANCE_AGENT_MAX_CONCURRENT:'3', APPLIANCE_AGENT_DAILY_USD_MICROS:String(Number(spent)+10)},async()=>result);
+  const lastCharge = make({...maxOne, APPLIANCE_AGENT_DAILY_MICROS:String(Number(spent)+10)},async()=>result);
   const attempts = await Promise.allSettled([call(lastCharge.agents,randomUUID()), call(lastCharge.agents,randomUUID())]);
   assert.equal(attempts.filter(a=>a.status==='fulfilled').length,1);
   assert.equal(attempts.find(a=>a.status==='rejected').reason.statusCode,429);
@@ -85,4 +102,13 @@ module.exports = async function verifyAdmission({ db, Run, itemId, items, policy
   assert.deepEqual(await spend(),before);
   assert.equal(await Run.count({where:{request_key:invalidKey}}),0);
   assert.equal((await call(other.agents,invalidKey)).status,'no_match');
+  await db.query('UPDATE agent_daily_spend SET utc_day=UTC_DATE()-INTERVAL 1 DAY WHERE user_id=1');
+  const uk = make({APPLIANCE_AGENT_ENABLED:'true'},async()=>result);
+  const paidKeys = Array.from({length:5},()=>randomUUID());
+  for (const paidKey of paidKeys) await call(uk.agents,paidKey);
+  await assert.rejects(call(uk.agents,randomUUID()),/Daily lookup budget/);
+  assert.equal((await call(uk.agents,paidKeys[0])).status,'no_match');
+  const [[today]] = await db.query('SELECT * FROM agent_daily_spend WHERE user_id=1 AND utc_day=UTC_DATE()');
+  assert.equal(today.currency,'GBP');
+  assert.equal(Number(today.reserved_micros),1000000);
 };

@@ -1,3 +1,4 @@
+const providerCost = require('./providerCost');
 const manualContract = require('./manualContract');
 // Isolated workspace: the existing OpenAI 4 / Zod 3 consumers stay unchanged.
 const { Agent, Runner, OpenAIProvider, tool, webSearchTool } = require('@openai/agents');
@@ -66,9 +67,19 @@ function createRuntime({ apiKey, model = 'gpt-4o-mini', searchModel = 'gpt-5-min
         outputType: z.object({ candidates: z.array(z.object({ title: z.string(), url: z.string(), model: z.string(), quote: z.string(), kind: z.enum(['pdf', 'support_page']) })), limitations: z.string() }),
         modelSettings: { maxTokens: limits.maxOutputTokens, store: false, reasoning: {effort:'low'}, providerData: { max_tool_calls: limits.maxToolCalls, include: ['web_search_call.action.sources'] } }
       });
-      const result = await runner.run(agent, 'Find the correct instruction manual for the confirmed appliance.', { maxTurns: limits.maxTurns, signal: signal ?? AbortSignal.timeout(limits.deadlineMs) });
+      let result;
+      try {
+        result = await runner.run(agent, 'Find the correct instruction manual for the confirmed appliance.', {
+          maxTurns: limits.maxTurns, signal: signal ?? AbortSignal.timeout(limits.deadlineMs)
+        });
+      } catch (error) {
+        // The pinned SDK can attach responses completed before a failed turn.
+        const observed = providerCost(searchModel, error.state?._modelResponses ?? []);
+        error.providerCost = { ...observed, partial: true };
+        throw error;
+      }
       const sources = citedSources(result);
-      return { ...result.finalOutput, sourceUrls: [...sources], usage: { modelCalls: result.rawResponses.length, totalTokens: result.rawResponses.reduce((n, r) => n + (r.usage?.totalTokens || 0), 0) } };
+      return { ...result.finalOutput, sourceUrls: [...sources], providerCost: providerCost(searchModel, result.rawResponses), usage: { modelCalls: result.rawResponses.length, totalTokens: result.rawResponses.reduce((n, r) => n + (r.usage?.totalTokens || 0), 0) } };
     }
   };
 }

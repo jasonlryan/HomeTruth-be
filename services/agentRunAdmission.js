@@ -38,17 +38,20 @@ async function reserve({ Run, policy, key, identity, execution, paid }) {
       const active = await Run.count({ where: { user_id: key.user_id, status: 'running',
         updatedAt: { [Op.gt]: new Date(now - interruptedMs) } }, transaction });
       if (active >= policy.maxConcurrent) throw new ItemError('Concurrent lookup limit reached.', 429);
-      const replacements = { user: key.user_id, day: clock.day, charge: policy.lookupMicros };
-      const [spend] = await db.query('SELECT reserved_micros FROM agent_daily_spend WHERE user_id=:user AND utc_day=:day', {
+      const replacements = { user: key.user_id, day: clock.day, currency: policy.currency, charge: policy.lookupMicros };
+      const [spend] = await db.query('SELECT currency, reserved_micros FROM agent_daily_spend WHERE user_id=:user AND utc_day=:day', {
         ...options, replacements
       });
+      if (spend && spend.currency !== policy.currency) {
+        throw new ItemError('The daily lookup allowance is already assigned to another currency.', 429);
+      }
       if (Number(spend?.reserved_micros || 0) > policy.dailyMicros - policy.lookupMicros) {
         throw new ItemError('Daily lookup budget reached.', 429);
       }
-      await db.query('INSERT INTO agent_daily_spend (user_id, utc_day, reserved_micros) VALUES (:user,:day,:charge) ON DUPLICATE KEY UPDATE reserved_micros = reserved_micros + :charge', { transaction, replacements });
+      await db.query('INSERT INTO agent_daily_spend (user_id, utc_day, currency, reserved_micros) VALUES (:user,:day,:currency,:charge) ON DUPLICATE KEY UPDATE reserved_micros = reserved_micros + :charge', { transaction, replacements });
     }
     const run = await Run.create({ ...key, status: 'running', identity, execution: {
-      ...execution, startedMs: now, reservedMicros: paid ? policy.lookupMicros : 0
+      ...execution, currency: policy.currency, startedMs: now, reservedMicros: paid ? policy.lookupMicros : 0
     } }, { transaction });
     return [run, true];
   });

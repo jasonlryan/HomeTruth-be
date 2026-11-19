@@ -6,9 +6,10 @@ Apply the Sequelize migration before starting the updated backend. Use the same 
 | --- | --- |
 | APPLIANCE_AGENT_ENABLED | Defaults to false. Set to true to admit fresh runs. |
 | APPLIANCE_AGENT_REVISION | Registered revision for new runs. Defaults to 1. |
-| APPLIANCE_AGENT_MAX_CONCURRENT | Required positive integer when enabled. Counts running lookups for each principal across items and backend workers. |
-| APPLIANCE_AGENT_DAILY_USD_MICROS | Required daily allocation per principal, in millionths of one US dollar. The day begins at midnight UTC. |
-| APPLIANCE_AGENT_LOOKUP_USD_MICROS | Required allocation for each paid lookup. Must fit the daily allowance. Agree a conservative allocation for the chosen model, tools and execution limits before enabling. |
+| APPLIANCE_AGENT_BUDGET_CURRENCY | Deployment market currency. GBP is the approved UK pilot default. EUR and USD are recognised and inactive. Client locale and property selection never set this value. |
+| APPLIANCE_AGENT_MAX_CONCURRENT | UK default and ceiling of one running lookup per homeowner across items and workers. |
+| APPLIANCE_AGENT_DAILY_MICROS | UK default and ceiling of 1,000,000 GBP micros (£1) per homeowner per UTC day. |
+| APPLIANCE_AGENT_LOOKUP_MICROS | UK pilot reserves 200,000 GBP micros (20p) per paid lookup. |
 | APPLIANCE_AGENT_MAX_TURNS | Optional lower limit, up to four model turns. |
 | APPLIANCE_AGENT_MAX_TOOL_CALLS | Optional lower limit, up to three hosted tool calls per model response. |
 | APPLIANCE_AGENT_MAX_OUTPUT_TOKENS | Optional lower limit, up to 2,500 tokens per response. |
@@ -18,4 +19,8 @@ The spend ledger counts reserved allocations. Actual provider prices, input size
 
 A completed or failed lookup releases its concurrency slot. An abandoned running row stops counting after the existing three-minute interruption window. A repeat with the same request key returns the prior run. A deliberate new attempt uses a new key. Pre-migration runs use the revision 1 reader. A revision rollback must keep the readers for all persisted revisions registered.
 
-Pilot concurrency, daily allowance and per-lookup allocation await owner approval.
+The daily ledger has one row per homeowner per UTC day. Existing unlabelled daily balances migrate as USD. If an existing balance has a different currency, paid admission resumes on the next UTC day. Legacy run snapshots with a reservation and no currency also represent USD. Apply both migrations before rollout. Keep the currency-aware schema and disable admission if rolling back the application while local-currency balances exist.
+
+HomeTruth funds the pilot. A reservation creates no customer charge or subscription debit. Each run's private usage record separately stores the provider, model, input/cached/output token counts, hosted web searches and an estimated cost in USD micros. The estimate uses the standard GPT-5 mini rate card verified on 19 November 2026. Other models retain usage with an unknown estimate. A failure can incur provider costs even when usage is unavailable. Use the provider invoice to reconcile actual expenditure. No foreign exchange conversion is needed for admission.
+
+Pricing sources are the [GPT-5 mini model rates](https://developers.openai.com/api/docs/models/gpt-5-mini) and [web search rates](https://developers.openai.com/api/docs/pricing).
