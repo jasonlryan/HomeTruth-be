@@ -14,7 +14,9 @@ router.get("/:id/documents", PropertyRecordController.listPropertyDocuments);
 router.post("/:id/documents", PropertyRecordController.linkPropertyDocument);
 router.use("/:propertyId", propertyFactRoutes);
 router.use("/:propertyId", propertyTaskRoutes);
-router.use("/:propertyId", require("./homeItemRoutes"));
+if (process.env.HT_APPLIANCE_ITEMS_ENABLED === "true") {
+  router.use("/:propertyId", require("./homeItemRoutes"));
+}
 router.get("/:id", PropertyRecordController.getPropertyRecord);
 router.patch("/:id", PropertyRecordController.updatePropertyRecord);
 

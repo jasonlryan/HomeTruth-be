@@ -1,8 +1,4 @@
-const path = require("path");
-const dotenv = require("dotenv");
-
-const envFile = process.env.APP_ENV === "staging" ? ".env_staging" : ".env";
-dotenv.config({ path: path.join(__dirname, "..", envFile) });
+require("./loadLocalEnvironment");
 
 const databaseConfig = {
   username: process.env.DB_USER,
@@ -17,6 +13,4 @@ const databaseConfig = {
 module.exports = {
   development: databaseConfig,
   test: databaseConfig,
-  staging: databaseConfig,
-  production: databaseConfig,
 };

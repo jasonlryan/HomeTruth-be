@@ -1,5 +1,6 @@
+const { chatPagination } = require('../utils/chatPagination');
+const { reviewDocumentAnswer } = require('../services/documentEvidenceReview');
 const { UserDocument, UserDocumentChatHistory } = require('../models');
-const UserDocumentAnalysisService = require('../services/userDocumentAnalysisService');
 const UserDocumentVectorService = require('../services/userDocumentVectorService');
 const OpenAI = require('openai');
 const env = require('../config/env');
@@ -85,62 +86,13 @@ class UserDocumentChatController {
                 5
             );
 
-            let aiResponse = '';
-
-            if (relevantChunks.length > 0) {
-                // Use RAG approach with relevant chunks
-                const context = relevantChunks.map(chunk => chunk.text).join('\n\n');
-                
-                const prompt = `Based on the following document content, answer the user's question. Be specific and cite relevant parts of the document.
-
-Document: ${document.name}
-Document Type: ${document.doc_type}
-Category: ${document.category}
-
-Relevant content from document:
-${context}
-
-User question: ${question}
-
-Provide a helpful, accurate answer based on the document content. If the information is not available in the document, say so clearly.`;
-
-                try {
-                    const response = await openai.chat.completions.create({
-                        model: LLM_MODEL,
-                        messages: [
-                            {
-                                role: 'system',
-                                content: 'You are a helpful assistant that answers questions about property documents. Be accurate and cite specific information from the document when possible.'
-                            },
-                            {
-                                role: 'user',
-                                content: prompt
-                            }
-                        ],
-                        temperature: 0.3,
-                        top_p: 0.9,
-                        max_tokens: 4096
-                    });
-
-                    aiResponse = response.choices[0].message.content;
-
-                } catch (openaiError) {
-                    console.error('OpenAI error:', openaiError);
-                    aiResponse = 'I encountered an error while processing your question. Please try again.';
-                }
-
-            } else {
-                // Fallback to simple analysis if no relevant chunks found
-                try {
-                    aiResponse = await UserDocumentAnalysisService.analyzeForChat(
-                        document.text_content || '',
-                        question
-                    );
-                } catch (analysisError) {
-                    console.error('Analysis error:', analysisError);
-                    aiResponse = 'I couldn\'t find relevant information in this document to answer your question. Please try rephrasing your question or check if the document contains the information you\'re looking for.';
-                }
-            }
+            const context = relevantChunks.length
+                ? relevantChunks.map(chunk => chunk.text).join('\n\n')
+                : (document.text_content || '').substring(0, 2000);
+            const aiResponse = await reviewDocumentAnswer({
+                client: openai, model: LLM_MODEL, question,
+                context: `Document: ${document.name}\n${context}`
+            });
 
             // Save chat history
             try {
@@ -158,20 +110,22 @@ Provide a helpful, accurate answer based on the document content. If the informa
                 // Continue even if saving fails
             }
 
-            // Get ALL chat history for this document (all conversations)
+            // Return the newest bounded history window; older records remain available via pagination.
             const allChatHistory = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.findAll({
                     where: {
                         user_id: req.user.id,
                         document_id: document.id
                     },
-                    order: [['created_at', 'ASC']],
+                    order: [['created_at', 'DESC'], ['id', 'DESC']],
+                    limit: 21,
                     attributes: ['id', 'conversation_id', 'user_message', 'assistant_reply', 'created_at', 'has_context']
                 });
             });
 
             // Format chat history for frontend display
-            const formattedMessages = allChatHistory.map(chat => ({
+            const hasMoreHistory = allChatHistory.length > 20;
+            const formattedMessages = allChatHistory.slice(0, 20).reverse().map(chat => ({
                 id: chat.id,
                 type: 'message',
                 conversation_id: chat.conversation_id,
@@ -201,7 +155,8 @@ Provide a helpful, accurate answer based on the document content. If the informa
                     current_answer: aiResponse,
                     has_context: relevantChunks.length > 0,
                     chat_history: formattedMessages,
-                    total_messages: formattedMessages.length
+                    total_messages: formattedMessages.length,
+                    pagination: { current_page: 1, limit: 20, has_next_page: hasMoreHistory }
                 }
             });
 
@@ -219,6 +174,8 @@ Provide a helpful, accurate answer based on the document content. If the informa
      * Get chat history for a specific document
      */
     static async getDocumentChatHistory(req, res) {
+        const paging = chatPagination(req.query);
+        if (!paging) return res.status(400).json({ success: false, message: 'page must be a positive integer and limit must be between 1 and 100' });
         try {
             const { id } = req.params;
             const { conversation_id } = req.query;
@@ -250,13 +207,18 @@ Provide a helpful, accurate answer based on the document content. If the informa
             }
 
             // Get chat history with retry logic
-            const chatHistory = await UserDocumentChatController.retryQuery(async () => {
+            const historyRows = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.findAll({
                     where: whereClause,
-                    order: [['created_at', 'ASC']],
+                    order: [['created_at', 'DESC'], ['id', 'DESC']],
+                    limit: paging.limit + 1,
+                    offset: paging.offset,
                     attributes: ['id', 'conversation_id', 'user_message', 'assistant_reply', 'created_at', 'has_context']
                 });
             });
+
+            const hasMore = historyRows.length > paging.limit;
+            const chatHistory = historyRows.slice(0, paging.limit).reverse();
 
             // Format chat history for frontend display
             const formatChatHistory = (history) => {
@@ -307,6 +269,7 @@ Provide a helpful, accurate answer based on the document content. If the informa
                     document_id: document.id,
                     document_name: document.name,
                     conversation_id: conversation_id || null,
+                    pagination: { current_page: paging.page, limit: paging.limit, has_next_page: hasMore, has_prev_page: paging.page > 1 },
                     chat_history: groupedHistory,
                     total_conversations: conversation_id ? 1 : Object.keys(groupedHistory).length,
                     total_messages: conversation_id ? groupedHistory.length : Object.values(groupedHistory).flat().length
@@ -617,9 +580,12 @@ Provide insights about:
      * Get all chats for a document (simplified version of chat history)
      */
     static async getDocumentChats(req, res) {
+        const paging = chatPagination(req.query);
+        if (!paging) return res.status(400).json({ success: false, message: 'page must be a positive integer and limit must be between 1 and 100' });
         try {
             const { id } = req.params;
-            const { page = 1, limit = 20, conversation_id } = req.query;
+            const { conversation_id } = req.query;
+            const { page, limit, offset } = paging;
 
             // Find the document
             const document = await UserDocument.findOne({
@@ -647,9 +613,6 @@ Provide insights about:
                 whereClause.conversation_id = conversation_id;
             }
 
-            // Calculate pagination
-            const offset = (parseInt(page) - 1) * parseInt(limit);
-
             // Get total count with retry logic
             const totalCount = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.count({
@@ -661,7 +624,7 @@ Provide insights about:
             const chatHistory = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.findAll({
                     where: whereClause,
-                    order: [['created_at', 'DESC']], // Most recent first
+                    order: [['created_at', 'DESC'], ['id', 'DESC']], // Most recent first
                     limit: parseInt(limit),
                     offset: offset,
                     attributes: ['id', 'conversation_id', 'user_message', 'assistant_reply', 'created_at', 'has_context']
