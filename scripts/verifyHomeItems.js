@@ -11,7 +11,7 @@ function fixture() {
   const Item = {async findAll({where}){return rows.filter(r=>matches(r,where));},async findOne({where}){return rows.find(r=>matches(r,where));},async findOrCreate({where,defaults}){const found=rows.find(r=>matches(r,where));if(found)return[found,false];const row=wrap({id:rows.length+1,...where,...defaults});rows.push(row);return[row,true];},async update(p,{where}){const row=rows.find(r=>matches(r,where));if(!row)return[0];Object.assign(row,p);return[1];}};
   const Evidence = {async findAll({where}){return links.filter(r=>matches(r,where));},async findOne({where}){return links.find(r=>matches(r,where));},async findOrCreate({where,defaults}){const found=links.find(r=>matches(r,where));if(found)return[found];const row=wrap({id:links.length+1,...where,...defaults});links.push(row);return[row];}};
   const Person = {async findOne({where}){if(where.user_id===1 && [42,43].includes(where.property_id))return{permission_level:'admin'};if(where.user_id===2 && where.property_id===42)return{permission_level:'read'};return null;}};
-  const service=createService({Item,Evidence,Person,db:{transaction:async fn=>fn({LOCK:{UPDATE:'UPDATE'}})},Document:{async findOne({where}){return docs.find(d=>matches(d,where));}},PropertyDocument:{async findAll(){return[];}}});
+  const service=createService({Item,Evidence,Person,db:{transaction:async fn=>fn({LOCK:{UPDATE:'UPDATE'}})},Document:{async findAll(){return docs;},async findOne({where}){return docs.find(d=>matches(d,where));}},PropertyDocument:{async findAll(){return[];}}});
   return {service,rows,links,docs};
 }
 test('reject malformed IDs, dates and unproven value shapes',()=>{

@@ -124,6 +124,7 @@ router.post('/items/identify', costly,
 }));
 router.get('/items/:itemId', route(r => service.get(r.user.id, r.params.propertyId, r.params.itemId)));
 router.patch('/items/:itemId', route(r => service.update(r.user.id, r.params.propertyId, r.params.itemId, r.body)));
+router.post('/items/:itemId/vault-manual', route(r => service.keepVaultManual(r.user.id, r.params.propertyId, r.params.itemId, r.body)));
 router.post('/items/:itemId/evidence', route(r => service.attach(r.user.id, r.params.propertyId, r.params.itemId, r.body)));
 router.delete('/items/:itemId/evidence/:evidenceId', route(r => service.detach(r.user.id, r.params.propertyId, r.params.itemId, r.params.evidenceId)));
 router.get('/items/:itemId/evidence/:evidenceId/file', async (req, res) => {

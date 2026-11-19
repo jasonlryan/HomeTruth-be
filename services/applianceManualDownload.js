@@ -1,7 +1,7 @@
 const https = require('https');
 const dns = require('dns').promises;
 const net = require('net');
-const { officialURL, containsModel } = require('./applianceManualPolicy');
+const { officialURL, isOperatingManual } = require('./applianceManualPolicy');
 const { ItemError } = require('./itemContract');
 const MAX_BYTES = 5 * 1024 * 1024;
 function publicAddress(address) {
@@ -37,7 +37,7 @@ async function download(url, domains, redirects = 0, deadline = Date.now()+45000
 }
 async function extractAndCheck(buffer, model) {
   const text = (await require('pdf-parse')(Uint8Array.from(buffer))).text;
-  if (!text?.trim() || text.length > 750000 || !containsModel(text, model)) throw new ItemError('The complete model could not be verified inside this PDF. Open it and check, then upload it if appropriate.');
+  if (!text?.trim() || text.length > 750000 || !isOperatingManual(text, model)) throw new ItemError('This PDF could not be verified as operating instructions for the complete model. Open it and check, then upload it if appropriate.');
   return text;
 }
 module.exports = { download, extractAndCheck, publicAddress };

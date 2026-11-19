@@ -29,7 +29,7 @@ module.exports = function({items,Run,runtime,importManual,policy,reserve = admis
       run=await recover(run);
       if(run.status==='saved'){
         const current=await items.get(user,home,itemId);
-        if(!current.evidence.some(e=>e.documentId===run.result.documentId)){
+        if(!current.evidence.some(e=>e.documentId===run.result.documentId && e.exactModel && e.hasText)){
           await run.update({status:'needs_review',result:{...run.result,notice:'The saved manual association is no longer present. Review the source before adding it again.'}});
         }
       }

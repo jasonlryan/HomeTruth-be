@@ -81,7 +81,7 @@ test('PDF quotation whitespace is restored from the original source; altered wor
 
 test('a repeat search reuses an already attached manual instead of downloading a duplicate',async()=>{
  const attach=[];
- const items={async find(){return {record:{identity:{brand:'Bosch',model:'W100'}}};},async get(){return {evidence:[{documentId:8}]};},async document(){return {id:8,status:'ready',text_content:'W100 instructions',ai_analysis:{discoveredUrl:'https://bosch-home.co.uk/manual.pdf'}};},async attach(...args){attach.push(args);}};
+ const items={async find(){return {record:{identity:{brand:'Bosch',model:'W100'}}};},async get(){return {evidence:[{documentId:8}]};},async document(){return {id:8,status:'ready',text_content:'User manual for W100. Clean the filter after use.',ai_analysis:{discoveredUrl:'https://bosch-home.co.uk/manual.pdf'}};},async attach(...args){attach.push(args);}};
  const importer=require('../services/importApplianceManual')({items,Document:{async findOne(){throw new Error('Must not create another copy');}},vectorService:{}});
  assert.equal(await importer({user:1,home:2,itemId:3,identity:{brand:'Bosch',model:'W100'},candidate:{url:'https://bosch-home.co.uk/manual.pdf'},runId:5}),8);
  assert.equal(attach.length,1);
@@ -178,4 +178,15 @@ test('provider estimates price cached tokens and web searches independently of m
   assert.equal(priced.searchCalls,2);
   assert.equal(cost('unpriced-model',[response]).estimatedMicros,null);
   assert.equal(cost('gpt-5-mini',[]).estimatedMicros,null);
+});
+
+test('an exact model in a sales sheet or model suffix variant cannot qualify a manual', () => {
+  const {isOperatingManual} = require('../services/applianceManualPolicy');
+  assert.equal(isOperatingManual('Bosch WAN28201GB. Optional accessories. EcoSilence Drive', 'WAN28201GB'), false);
+  assert.equal(isOperatingManual('Product specification sheet. User manual available separately. WAN28201GB', 'WAN28201GB'), false);
+  assert.equal(isOperatingManual('User manual and installation instructions. WAN28201GB/01', 'WAN28201GB'), false);
+  assert.equal(isOperatingManual('WAN28201GB User manual and installation instructions', 'WAN28201GB'), true);
+  const f = setup();
+  f.raw.candidates[0].title = 'Bosch product data sheet';
+  assert.equal(reviewCandidates(f.raw, 'Bosch', 'W100').length, 0);
 });
