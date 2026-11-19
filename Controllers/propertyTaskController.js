@@ -33,6 +33,19 @@ class PropertyTaskController {
     }
   }
 
+  static async createFollowUp(req, res) {
+    try {
+      const { task, created } = await PropertyTaskService.createFollowUp(
+        req.user.id,
+        req.params.propertyId,
+        req.body
+      );
+      return res.status(created ? 201 : 200).json({ success: true, data: task });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  }
+
   static async generatePropertyTasks(req, res) {
     try {
       const data = await PropertyTaskService.generateTasksForProperty(

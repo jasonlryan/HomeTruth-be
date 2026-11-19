@@ -81,6 +81,7 @@ const getActiveRelationship = async (userId, propertyId, options = {}) =>
       relationship_status: "active",
     },
     transaction: options.transaction,
+    lock: options.lock,
   });
 
 const requirePropertyPermission = async (
@@ -110,6 +111,30 @@ const normalizeStatus = (value) => {
     throw new PropertyTaskError(`Unsupported task status: ${status}`);
   }
   return status;
+};
+
+const normalizeFollowUp = (payload) => {
+  const title = typeof payload?.title === "string" ? payload.title.trim() : "";
+  if (!title || title.length > 180) {
+    throw new PropertyTaskError("Enter a follow-up of 1 to 180 characters");
+  }
+
+  const dueDate = payload.dueDate ?? null;
+  if (dueDate !== null && (
+    typeof dueDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) ||
+    dueDate < "1000-01-01" ||
+    toDateOnly(dueDate) !== dueDate
+  )) {
+    throw new PropertyTaskError("Enter a valid due date");
+  }
+
+  const requestId = payload.requestId;
+  if (typeof requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(requestId)) {
+    throw new PropertyTaskError("A valid follow-up request ID is required");
+  }
+
+  return { title, dueDate, requestId };
 };
 
 const normalizeTaskProposal = (proposal) => {
@@ -501,6 +526,56 @@ class PropertyTaskService {
     });
 
     return tasks.map(toTaskResponse);
+  }
+
+  static async createFollowUp(userId, propertyId, payload = {}) {
+    const normalizedPropertyId = toIntegerId(propertyId, "propertyId");
+    const { title, dueDate, requestId } = normalizeFollowUp(payload);
+
+    return sequelize.transaction(async (transaction) => {
+      await requirePropertyPermission(
+        userId,
+        normalizedPropertyId,
+        CONTRIBUTOR_PERMISSION_LEVELS,
+        { transaction, lock: transaction.LOCK.UPDATE }
+      );
+
+      // The relationship lock serializes retries by this user for this home.
+      const generationKey = `manual:${normalizedPropertyId}:${userId}:${requestId}`;
+      const existing = await PropertyTask.findOne({
+        where: { generation_key: generationKey },
+        transaction,
+      });
+      if (existing) {
+        if (existing.title !== title || existing.due_date !== dueDate) {
+          throw new PropertyTaskError("This request already saved a different follow-up", 409);
+        }
+        return { task: toTaskResponse(existing), created: false };
+      }
+
+      const task = await PropertyTask.create({
+        generation_key: generationKey,
+        property_id: normalizedPropertyId,
+        assigned_user_id: userId,
+        task_type: "known_issue_follow_up",
+        source_type: "manual",
+        title,
+        due_date: dueDate,
+        status: "open",
+        status_updated_by_user_id: userId,
+        status_updated_at: new Date(),
+      }, { transaction });
+
+      await PropertyTaskStatusEvent.create({
+        property_task_id: task.id,
+        property_id: normalizedPropertyId,
+        user_id: userId,
+        from_status: null,
+        to_status: "open",
+      }, { transaction });
+
+      return { task: toTaskResponse(task), created: true };
+    });
   }
 
   static async generateTasksForProperty(userId, propertyId) {

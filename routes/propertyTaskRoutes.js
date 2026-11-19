@@ -4,6 +4,7 @@ const PropertyTaskController = require("../Controllers/propertyTaskController");
 const router = express.Router({ mergeParams: true });
 
 router.get("/tasks", PropertyTaskController.listPropertyTasks);
+router.post("/tasks", PropertyTaskController.createFollowUp);
 router.post("/tasks/generate", PropertyTaskController.generatePropertyTasks);
 router.patch("/tasks/:taskId", PropertyTaskController.updatePropertyTask);
 router.get(
