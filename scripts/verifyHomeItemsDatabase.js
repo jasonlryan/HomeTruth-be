@@ -22,12 +22,12 @@ async function main() {
     const q=db.getQueryInterface();
     const pk={type:DataTypes.INTEGER,primaryKey:true,autoIncrement:true};
     await q.createTable('users',{id:pk});await q.createTable('properties',{id:pk});
-    await q.createTable('userDocuments',{id:pk,user_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN,name:DataTypes.STRING,status:DataTypes.STRING,text_content:DataTypes.TEXT});
+    await q.createTable('userDocuments',{id:pk,user_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN,name:DataTypes.STRING,doc_type:DataTypes.STRING,ai_analysis:DataTypes.JSON,status:DataTypes.STRING,text_content:DataTypes.TEXT});
     await migration.up(q,Sequelize);await answerMigration.up(q,Sequelize);await agentMigration.up(q,Sequelize);await admissionMigration.up(q,Sequelize);await currencyMigration.up(q,Sequelize);
     // Load the actual model definitions against the isolated connection, never application env.
     require.cache[require.resolve('../config/database')]={exports:db};
     const Item=require('../models/homeItem'), Evidence=require('../models/homeItemEvidence'),Answer=require('../models/homeItemAnswer');
-    const Document=db.define('TestDoc',{id:pk,user_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN,name:DataTypes.STRING,status:DataTypes.STRING,text_content:DataTypes.TEXT},{tableName:'userDocuments',timestamps:false});
+    const Document=db.define('TestDoc',{id:pk,user_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN,name:DataTypes.STRING,doc_type:DataTypes.STRING,ai_analysis:DataTypes.JSON,status:DataTypes.STRING,text_content:DataTypes.TEXT},{tableName:'userDocuments',timestamps:false});
     const Person=db.define('TestPerson',{user_id:DataTypes.INTEGER,property_id:DataTypes.INTEGER,relationship_status:DataTypes.STRING,permission_level:DataTypes.STRING},{tableName:'verify_people',timestamps:false});
     const PropertyDocument=db.define('TestPropertyDoc',{property_id:DataTypes.INTEGER,user_document_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN},{tableName:'verify_document_links',timestamps:false});
     await Person.sync();await PropertyDocument.sync();
@@ -59,6 +59,17 @@ async function main() {
     assert.equal(raced.filter(r=>r.status==='fulfilled').length,1);assert.equal(raced.find(r=>r.status==='rejected').reason.statusCode,409);
     const AgentRun=require('../models/applianceAgentRun');
     const agentItem=await s.create(1,42,{requestKey:require('crypto').randomUUID(),record:{...record,identity:{brand:'Bosch',model:'W100',method:'manual'}}});
+    const manualDoc = await Document.create({user_id:1,is_active:true,name:'Bosch W100 manual',status:'ready',text_content:'Bosch W100 User manual. Clean the drum after use.'});
+    const sheet = await Document.create({user_id:1,is_active:true,name:'Bosch W100 manual',status:'ready',text_content:'Bosch W100 product specification sheet. Optional accessories.'});
+    assert.equal((await s.get(1,42,agentItem.id)).vaultManual.documentId,manualDoc.id);
+    assert.equal((await s.get(2,42,agentItem.id)).vaultManual,null);
+    await assert.rejects(s.keepVaultManual(1,42,agentItem.id,{documentId:sheet.id,itemVersion:1}),{statusCode:409});
+    await assert.rejects(s.keepVaultManual(1,42,agentItem.id,{documentId:manualDoc.id,itemVersion:2}),{statusCode:409});
+    const keep = () => s.keepVaultManual(1,42,agentItem.id,{documentId:manualDoc.id,itemVersion:1});
+    await keep();
+    const kept=await keep();
+    assert.equal(kept.vaultManual,null);
+    assert.equal(kept.evidence.filter(e=>e.documentId===manualDoc.id && e.exactModel).length,1);
     let searches=0;
     const policyEnv = { APPLIANCE_AGENT_ENABLED:'true', APPLIANCE_AGENT_MAX_CONCURRENT:'1',
       APPLIANCE_AGENT_DAILY_MICROS:'1000', APPLIANCE_AGENT_LOOKUP_MICROS:'10' };

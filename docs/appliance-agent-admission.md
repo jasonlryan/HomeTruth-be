@@ -1,5 +1,7 @@
 # Appliance lookup admission
 
+The appliance HTTP routes require HT_APPLIANCE_ITEMS_ENABLED=true. Typed Ask offers require HT356_ASK_MANUAL_HANDOFF=true. Both default off.
+
 Apply the Sequelize migration before starting the updated backend. Use the same configuration on every instance. Drain older instances before opening paid admission. A restart loads the selected revision and limits. Existing authorised reviews, confirmed imports and request-key replays remain available when admission is disabled.
 
 | Backend environment variable | Meaning |

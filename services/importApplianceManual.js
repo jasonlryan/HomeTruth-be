@@ -9,14 +9,14 @@ module.exports=function({items,Document,vectorService}) {
     const current=await items.get(user,home,itemId);
     for(const evidence of current.evidence){
       const linked=await items.document(user,evidence.documentId);
-      if(linked.ai_analysis?.discoveredUrl===candidate.url && linked.status==='ready' && require('./applianceManualPolicy').containsModel(linked.text_content||'',identity.model)){
+      if(linked.ai_analysis?.discoveredUrl===candidate.url && linked.status==='ready' && require('./applianceManualPolicy').isOperatingManual(linked.text_content||'',identity.model)){
         await items.attach(user,home,itemId,{documentId:linked.id,role:'manual',matchStatus:'user_confirmed'});
         return linked.id;
       }
     }
     // Recover a completed import if the process stopped before recording its result.
     const existing=await Document.findOne({where:{user_id:user,is_active:true,'ai_analysis.agentRunId':runId}});
-    if(existing && existing.ai_analysis?.discoveredUrl===candidate.url && require('./applianceManualPolicy').containsModel(existing.text_content||'',identity.model)){
+    if(existing && existing.ai_analysis?.discoveredUrl===candidate.url && require('./applianceManualPolicy').isOperatingManual(existing.text_content||'',identity.model)){
       if(!existing.chunks_count){
         await vectorService.deleteDocumentChunks(existing.id,user);
         const ids=await vectorService.storeDocumentChunks(existing.text_content,{document_id:existing.id,user_id:user,filename:existing.name,doc_type:'Appliance manual',category:'maintenance',tags:['appliance manual'],property_id:Number(home),property_ids:[Number(home)]});
