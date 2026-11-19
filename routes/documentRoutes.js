@@ -59,6 +59,8 @@ router.post(
   documentController.bulkUpload
 );
 
+router.get('/knowledge/records', auth, checkRole(['admin']), documentController.listIndexedRecords);
+
 // Get knowledge base statistics - Admin only
 router.get(
   '/knowledge/stats',

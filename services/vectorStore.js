@@ -2,6 +2,24 @@ const { qdrantClient, COLLECTION_NAME } = require('../config/qdrant');
 const OpenAIEmbeddingService = require('./openaiEmbeddingService');
 
 class VectorStore {
+  static async listIndexedRecords(offset) {
+    const page = await qdrantClient.scroll(COLLECTION_NAME, {
+      limit: 25,
+      offset,
+      with_vector: false,
+      with_payload: ['title', 'filename', 'document_id', 'chunk_index']
+    });
+    return {
+      records: page.points.map(({ id, payload }) => ({
+        id,
+        title: payload?.title || payload?.filename || null,
+        documentId: payload?.document_id ?? null,
+        chunkIndex: payload?.chunk_index ?? null
+      })),
+      nextCursor: page.next_page_offset ?? null
+    };
+  }
+
   static async storeDocuments(chunks, metadata) {
     try {
       const points = [];
