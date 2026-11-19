@@ -14,7 +14,7 @@ const CLIENT_ID = '3pr0o0r8hgnut1kathv8hq8spr';
 const CLIENT_SECRET = 'ej45hmuaol1vvkouqlvnadrm9ddbncghndnk7gtllclbrq3ae74';
 const AGENCY_REF = '9447fee7-25a2-46f7-bfeb-30d373a66cc6';
 const TEMP_DIR = path.join(__dirname, '../../temp-images');
-const SERVER_BASE_URL = process.env.SERVER_BASE_URL || 'https://b081ce4881c5.ngrok-free.app';
+const SERVER_BASE_URL = process.env.SERVER_BASE_URL || 'http://localhost:8005';
 
 // Initialize OpenAI
 const openai = new OpenAI({
