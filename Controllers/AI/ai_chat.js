@@ -555,7 +555,6 @@ const chatController = {
       }
 
 
-
       const { count, rows: chatHistory } = await ChatHistory.findAndCountAll({
         where: whereClause,
         order: [['createdAt', 'DESC'], ['id', 'DESC']],
@@ -616,11 +615,6 @@ const chatController = {
           success: false,
           message: 'user_id is required'
         });
-      }
-
-      const whereClause = { user_id: parseInt(user_id) };
-      if (saved_only === 'true') {
-        whereClause.is_saved = true;
       }
 
       const savedOnly = saved_only === 'true';

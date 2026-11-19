@@ -613,9 +613,6 @@ Provide insights about:
                 whereClause.conversation_id = conversation_id;
             }
 
-            // Calculate pagination
-
-
             // Get total count with retry logic
             const totalCount = await UserDocumentChatController.retryQuery(async () => {
                 return await UserDocumentChatHistory.count({
