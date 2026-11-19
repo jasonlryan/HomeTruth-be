@@ -17,7 +17,9 @@ router.get('/', UserDocumentController.getUserDocuments);
 router.get('/stats', UserDocumentController.getDocumentStats);
 router.get('/:id', UserDocumentController.getDocumentById);
 router.get('/:id/preview', UserDocumentController.getDocumentPreview);
-router.get('/:id/pdf-page', getPdfPage);
+if (process.env.HT_CONTROL_CENTRE_FOLLOWUPS_ENABLED === 'true') {
+  router.get('/:id/pdf-page', getPdfPage);
+}
 router.put('/:id', UserDocumentController.updateDocument);
 router.put('/:id/name', UserDocumentController.updateDocumentName);
 router.delete('/:id', UserDocumentController.deleteDocument);
