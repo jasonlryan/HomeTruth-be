@@ -6,6 +6,7 @@ const createService = require('../services/homeItemService');
 const migration = require('../migrations/20261029120000-create-home-items');
 const answerMigration=require('../migrations/20261029130000-create-home-item-answers');
 const agentMigration=require('../migrations/20261029150000-create-appliance-agent-runs');
+const admissionMigration=require('../migrations/20261119120000-agent-run-admission');
 async function main() {
   if (process.env.HT341_LOCAL_DB_VERIFY !== 'true') throw new Error('Set HT341_LOCAL_DB_VERIFY=true to test the isolated local Docker database.');
   const config=JSON.parse(execFileSync('docker',['inspect','hometruth-mysql'],{encoding:'utf8'}))[0];
@@ -21,7 +22,7 @@ async function main() {
     const pk={type:DataTypes.INTEGER,primaryKey:true,autoIncrement:true};
     await q.createTable('users',{id:pk});await q.createTable('properties',{id:pk});
     await q.createTable('userDocuments',{id:pk,user_id:DataTypes.INTEGER,is_active:DataTypes.BOOLEAN,name:DataTypes.STRING,status:DataTypes.STRING,text_content:DataTypes.TEXT});
-    await migration.up(q,Sequelize);await answerMigration.up(q,Sequelize);await agentMigration.up(q,Sequelize);
+    await migration.up(q,Sequelize);await answerMigration.up(q,Sequelize);await agentMigration.up(q,Sequelize);await admissionMigration.up(q,Sequelize);
     // Load the actual model definitions against the isolated connection, never application env.
     require.cache[require.resolve('../config/database')]={exports:db};
     const Item=require('../models/homeItem'), Evidence=require('../models/homeItemEvidence'),Answer=require('../models/homeItemAnswer');
@@ -58,7 +59,9 @@ async function main() {
     const AgentRun=require('../models/applianceAgentRun');
     const agentItem=await s.create(1,42,{requestKey:require('crypto').randomUUID(),record:{...record,identity:{brand:'Bosch',model:'W100',method:'manual'}}});
     let searches=0;
-    const makeAgent=()=>require('../services/homeAgents')({items:s,Run:AgentRun,runtime:{async findManual(){searches++;return {candidates:[{title:'Manufacturer manual',url:'https://bosch-home.co.uk/test-W100.pdf',model:'W100',quote:'W100 instructions'}],sourceUrls:['https://bosch-home.co.uk/test-W100.pdf']};}},async importManual(){return 5;}});
+    const policyEnv = { APPLIANCE_AGENT_ENABLED:'true', APPLIANCE_AGENT_MAX_CONCURRENT:'2',
+      APPLIANCE_AGENT_DAILY_USD_MICROS:'1000', APPLIANCE_AGENT_LOOKUP_USD_MICROS:'10' };
+    const makeAgent=()=>require('../services/homeAgents')({policyEnv,items:s,Run:AgentRun,runtime:{async findManual(){searches++;return {candidates:[{title:'Manufacturer manual',url:'https://bosch-home.co.uk/test-W100.pdf',model:'W100',quote:'W100 instructions'}],sourceUrls:['https://bosch-home.co.uk/test-W100.pdf']};}},async importManual(){return 5;}});
     const runKey={requestKey:require('crypto').randomUUID()};
     const lookup = () => makeAgent().agents.invoke({
       agent: 'appliance-information', operation: 'findManual',
@@ -71,6 +74,7 @@ async function main() {
     const saved=await makeAgent().applianceAgent.saveManual(1,42,agentItem.id,runA.id,{candidateIndex:0,confirmed:true});assert.equal(saved.status,'saved');
     // A removed association must not keep reporting the manual as saved.
     assert.equal((await makeAgent().applianceAgent.latest(1,42,agentItem.id)).status,'needs_review');
+    await require('./verifyAgentAdmissionDatabase')({ db, Run: AgentRun, itemId: agentItem.id, items: s, policyEnv });
     await s.update(1,42,agentItem.id,{version:1,archived:true});
     const updates=await Promise.allSettled([s.update(1,42,row.id,{version:1,record:{...record,name:'First save'}}),s.update(1,42,row.id,{version:1,record:{...record,name:'Second save'}})]);
     assert.equal(updates.filter(r=>r.status==='fulfilled').length,1);assert.equal(updates.find(r=>r.status==='rejected').reason.statusCode,409);
@@ -97,7 +101,7 @@ async function main() {
       await new Promise(resolve=>{process.once('SIGTERM',resolve);process.once('SIGINT',resolve);});
       await new Promise(resolve=>server.close(resolve));
     }
-    await agentMigration.down(q);await answerMigration.down(q);await migration.down(q);await migration.up(q,Sequelize);await answerMigration.up(q,Sequelize);await agentMigration.up(q,Sequelize);await agentMigration.down(q);await answerMigration.down(q);await migration.down(q);
+    await admissionMigration.down(q);await agentMigration.down(q);await answerMigration.down(q);await migration.down(q);await migration.up(q,Sequelize);await answerMigration.up(q,Sequelize);await agentMigration.up(q,Sequelize);await admissionMigration.up(q,Sequelize);await admissionMigration.down(q);await agentMigration.down(q);await answerMigration.down(q);await migration.down(q);
     console.log('PASS: isolated MySQL migration up/down/reapply, persistent records, separate values, permissions, concurrent cross-home evidence, stale-edit conflicts, persistent private agent runs and duplicate-run concurrency. No application database modified.');
   } finally {
     if(db)await db.close();await root.query(`DROP DATABASE IF EXISTS \`${schema}\``);await root.close();
