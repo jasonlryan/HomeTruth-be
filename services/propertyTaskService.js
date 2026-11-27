@@ -11,6 +11,9 @@ const {
   PropertyTaskStatusEvent,
   UserDocument,
 } = require("../models");
+const PropertyDocumentService = require("./propertyDocumentService");
+const PropertyFactService = require("./propertyFactService");
+const survey = require("./surveyPassageService");
 const PilotAnalyticsService = require("./pilotAnalyticsService");
 
 const READ_PERMISSION_LEVELS = new Set(["read", "contribute", "manage", "admin"]);
@@ -81,6 +84,7 @@ const getActiveRelationship = async (userId, propertyId, options = {}) =>
       relationship_status: "active",
     },
     transaction: options.transaction,
+    lock: options.lock,
   });
 
 const requirePropertyPermission = async (
@@ -110,6 +114,30 @@ const normalizeStatus = (value) => {
     throw new PropertyTaskError(`Unsupported task status: ${status}`);
   }
   return status;
+};
+
+const normalizeFollowUp = (payload) => {
+  const title = typeof payload?.title === "string" ? payload.title.trim() : "";
+  if (!title || title.length > 180) {
+    throw new PropertyTaskError("Enter a follow-up of 1 to 180 characters");
+  }
+
+  const dueDate = payload.dueDate ?? null;
+  if (dueDate !== null && (
+    typeof dueDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) ||
+    dueDate < "1000-01-01" ||
+    toDateOnly(dueDate) !== dueDate
+  )) {
+    throw new PropertyTaskError("Enter a valid due date");
+  }
+
+  const requestId = payload.requestId;
+  if (typeof requestId !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(requestId)) {
+    throw new PropertyTaskError("A valid follow-up request ID is required");
+  }
+
+  return { title, dueDate, requestId };
 };
 
 const normalizeTaskProposal = (proposal) => {
@@ -146,8 +174,9 @@ const toTaskResponse = (task) => ({
   priority: task.priority,
   status: task.status,
   sourceType: task.source_type,
+  hasSurveyPassage: task.source_type === "manual" && task.source_model === "EvidenceSource",
   sourceModel: task.source_model,
-  sourceId: task.source_id,
+  sourceId: task.source_type === "manual" ? null : task.source_id,
   generationKey: task.generation_key,
   dueDate: task.due_date,
   generatedAt: task.generated_at,
@@ -501,6 +530,109 @@ class PropertyTaskService {
     });
 
     return tasks.map(toTaskResponse);
+  }
+
+  static async createFollowUp(userId, propertyId, payload = {}) {
+    const normalizedPropertyId = toIntegerId(propertyId, "propertyId");
+    const { title, dueDate, requestId } = normalizeFollowUp(payload);
+    const selection = survey.normalizeSelection(payload.passage);
+
+    return sequelize.transaction(async (transaction) => {
+      await requirePropertyPermission(
+        userId,
+        normalizedPropertyId,
+        CONTRIBUTOR_PERMISSION_LEVELS,
+        { transaction, lock: transaction.LOCK.UPDATE }
+      );
+
+      // The relationship lock serializes retries by this user for this home.
+      const generationKey = `manual:${normalizedPropertyId}:${userId}:${requestId}`;
+      const existing = await PropertyTask.findOne({
+        where: { generation_key: generationKey },
+        transaction,
+      });
+      if (existing) {
+        if (existing.title !== title || existing.due_date !== dueDate ||
+            !(await survey.selectionMatchesSource(existing.source_id, selection, transaction))) {
+          throw new PropertyTaskError("This request already saved a different follow-up", 409);
+        }
+        return { task: toTaskResponse(existing), created: false };
+      }
+
+      let sourceId = null;
+      if (selection) {
+        const { documentId, pageNumber, start, end, digest } = selection;
+        const page = await survey.getPage(userId, documentId, pageNumber, { transaction });
+        if (!survey.selectionMatchesPage(page, selection)) {
+          throw new PropertyTaskError("The selected passage changed. Reopen the PDF page and select it again.", 409);
+        }
+        const link = await survey.findActiveLink(normalizedPropertyId, documentId, { transaction }) ||
+          await PropertyDocumentService.linkUserDocumentToProperty(
+            userId, normalizedPropertyId, documentId, { relevance: "evidence" }, { transaction }
+          );
+        const evidence = await PropertyFactService.createEvidenceSource(userId, normalizedPropertyId, {
+          propertyDocumentId: link.id,
+          pageNumber,
+          locator: { start, end, digest },
+        }, { transaction });
+        sourceId = evidence.id;
+      }
+
+      const task = await PropertyTask.create({
+        generation_key: generationKey,
+        property_id: normalizedPropertyId,
+        assigned_user_id: userId,
+        task_type: "known_issue_follow_up",
+        source_type: "manual",
+        source_model: sourceId ? "EvidenceSource" : null,
+        source_id: sourceId,
+        title,
+        due_date: dueDate,
+        status: "open",
+        status_updated_by_user_id: userId,
+        status_updated_at: new Date(),
+      }, { transaction });
+
+      await PropertyTaskStatusEvent.create({
+        property_task_id: task.id,
+        property_id: normalizedPropertyId,
+        user_id: userId,
+        from_status: null,
+        to_status: "open",
+      }, { transaction });
+
+      return { task: toTaskResponse(task), created: true };
+    });
+  }
+
+  static async getFollowUpPassage(userId, propertyId, taskId) {
+    const normalizedPropertyId = toIntegerId(propertyId, "propertyId");
+    await requirePropertyPermission(userId, normalizedPropertyId, READ_PERMISSION_LEVELS);
+    const task = await PropertyTask.findOne({
+      where: {
+        id: toIntegerId(taskId, "taskId"),
+        property_id: normalizedPropertyId,
+        source_type: "manual",
+        source_model: "EvidenceSource",
+      },
+    });
+    const source = task?.source_id && await EvidenceSource.findOne({
+      where: { id: task.source_id, property_id: normalizedPropertyId },
+    });
+    if (!source?.user_document_id) throw new PropertyTaskError("Saved passage unavailable.", 404);
+    const link = await survey.findActiveLink(normalizedPropertyId, source.user_document_id);
+    if (!link || link.id !== source.property_document_id) {
+      throw new PropertyTaskError("Saved passage unavailable.", 404);
+    }
+
+    const page = await survey.getPage(userId, source.user_document_id, source.page_number);
+    const available = source.locator && survey.selectionMatchesPage(page, source.locator);
+    return {
+      documentId: source.user_document_id,
+      pageNumber: source.page_number,
+      available: Boolean(available),
+      ...(available ? { ...page, start: source.locator.start, end: source.locator.end } : {}),
+    };
   }
 
   static async generateTasksForProperty(userId, propertyId) {

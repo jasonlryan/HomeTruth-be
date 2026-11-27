@@ -1,0 +1,20 @@
+name: hometruth-investor-demo
+services:
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: hometruth_investor_demo
+      MYSQL_USER: investor_demo
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Generate a dedicated demo password}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    ports:
+      - "127.0.0.1:${DB_PORT:-3360}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -u$$MYSQL_USER $$MYSQL_DATABASE -Nse 'SELECT 1'"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+volumes:
+  mysql-data:

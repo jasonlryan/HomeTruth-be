@@ -21,7 +21,7 @@ const { initializeQdrant, initializeUserDocumentsCollection, checkQdrantConnecti
 app.use(
   cors({
   
-    origin: ["http://localhost:3000","http://localhost:8007","https://b8299deae6d9.ngrok-free.app","https://hometruth.ohtplayground.com", "http://3.141.227.135:8007","https://hometruth.io"],
+    origin: (origin,callback) => callback(null,require('./config/corsOrigins')(origin,env)),
 
 
   credentials: true,
@@ -89,6 +89,7 @@ app.use('/api/pilot', pilotFeedbackRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/admin/users', adminDataRoutes);
+app.use('/api/admin/investor-demo', require('./routes/admin/investorDemoRoutes'));
 app.use('/api/admin/articles', adminArticleRoutes);
 app.use('/api/admin/pilot', adminPilotRoutes);
 app.use('/api/admin/partner-programmes', adminPartnerProgrammeRoutes);
@@ -158,7 +159,7 @@ if (useSSL) {
       cert: fs.readFileSync(sslCertPath),
     };
     server = https.createServer(options, app);
-    server.listen(port, async () => {
+    server.listen(port, process.env.LISTEN_HOST, async () => {
       console.log(`Secure server running on https://localhost:${port}`.green);
       await initializeRAGSystem();
     });
@@ -168,7 +169,7 @@ if (useSSL) {
   }
 } else {
   server = http.createServer(app);
-  server.listen(port, async () => {
+  server.listen(port, process.env.LISTEN_HOST, async () => {
     console.log(colors.bgGreen(`Server running on http://localhost:${port}`));
     await initializeRAGSystem();
   });

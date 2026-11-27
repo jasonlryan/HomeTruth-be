@@ -33,6 +33,33 @@ class PropertyTaskController {
     }
   }
 
+  static async createFollowUp(req, res) {
+    try {
+      const { task, created } = await PropertyTaskService.createFollowUp(
+        req.user.id,
+        req.params.propertyId,
+        req.body
+      );
+      return res.status(created ? 201 : 200).json({ success: true, data: task });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      return res.status(status).json({ success: false, message: status === 500 ? "The follow-up could not be saved." : error.message });
+    }
+  }
+
+  static async getFollowUpPassage(req, res) {
+    res.set("Cache-Control", "private, no-store");
+    try {
+      const data = await PropertyTaskService.getFollowUpPassage(
+        req.user.id, req.params.propertyId, req.params.taskId
+      );
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      return res.status(status).json({ success: false, message: status === 500 ? "The saved passage could not be opened." : error.message });
+    }
+  }
+
   static async generatePropertyTasks(req, res) {
     try {
       const data = await PropertyTaskService.generateTasksForProperty(

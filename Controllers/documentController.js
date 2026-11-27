@@ -167,6 +167,27 @@ const documentController = {
     }
   },
 
+  async listIndexedRecords(req, res) {
+    const { cursor } = req.query;
+    let offset;
+    if (cursor !== undefined) {
+      if (typeof cursor === 'string' && /^[0-9]+$/.test(cursor) && Number.isSafeInteger(Number(cursor))) {
+        offset = Number(cursor);
+      } else if (typeof cursor === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(cursor)) {
+        offset = cursor;
+      } else {
+        return res.status(400).json({ message: 'Invalid record cursor.' });
+      }
+    }
+    try {
+      const page = await VectorStore.listIndexedRecords(offset);
+      return res.json(page);
+    } catch (error) {
+      console.error('Unable to read shared Qdrant records:', error.message);
+      return res.status(503).json({ message: 'The Qdrant index is unavailable.' });
+    }
+  },
+
   // Get all documents (system-wide) - Document Library
   async getUserDocuments(req, res) {
     try {

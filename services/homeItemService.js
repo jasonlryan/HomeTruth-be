@@ -1,0 +1,164 @@
+const Joi = require('joi');
+const { registeredLink, resolveManual } = require('./manufacturerManualLink');
+const { Op } = require('sequelize');
+const { containsModel, domainsFor, officialURL, isOperatingManual } = require('./applianceManualPolicy');
+const { readable } = require('./itemSource');
+const { ItemError, record, validate, id, readLevels, writeLevels } = require('./itemContract');
+// Injectable dependencies keep permission/persistence tests independent of application startup.
+module.exports = function createHomeItemService({ Item, Evidence, Person, Document, PropertyDocument, db, resolveManufacturerManual = resolveManual }) {
+  const permission = async (user, home, write = false) => {
+    const relation = await Person.findOne({ where: { user_id: id(user), property_id: id(home), relationship_status: 'active' } });
+    if (!relation) throw new ItemError('Home record not found', 404);
+    if (!(write ? writeLevels : readLevels).has(relation.permission_level)) throw new ItemError('Permission required for this home', 403);
+  };
+  const find = async (user, home, itemId, write = false) => {
+    await permission(user, home, write);
+    const item = await Item.findOne({ where: { id: id(itemId), property_id: id(home), archived: false } });
+    if (!item) throw new ItemError('Item not found', 404);
+    return item;
+  };
+  const document = async (user, documentId, options = {}) => {
+    const doc = await Document.findOne({ where: { id: id(documentId), user_id: id(user), is_active: true }, ...options });
+    if (!doc) throw new ItemError('Document not found', 404);
+    return doc;
+  };
+  const matchesVaultManual = (doc, item) => {
+    const { brand, model } = item.record.identity;
+    if (!brand || !model || doc.status !== 'ready' || !readable(doc)) return false;
+    return isOperatingManual(doc.text_content, model) &&
+      Boolean(containsModel(doc.text_content, brand) || officialURL(doc.ai_analysis?.sourceUrl, domainsFor(brand)));
+  };
+
+  async function sharesHome(docId, home) {
+    const links = await PropertyDocument.findAll({ where: { user_document_id: docId, is_active: true } });
+    if (links.some(link => link.property_id !== id(home))) return false;
+    const evidenceLinks = await Evidence.findAll({ where: { user_document_id: docId } });
+    if (!evidenceLinks.length) return true;
+    const otherHome = await Item.findOne({
+      where: { id: { [Op.in]: evidenceLinks.map(link => link.item_id) }, property_id: { [Op.ne]: id(home) } },
+      attributes: ['id'],
+    });
+    return !otherHome;
+  }
+
+  async function vaultMatch(user, home, item, evidence) {
+    const { model } = item.record.identity;
+    if (!model || evidence.some(link => link.role === 'manual' && link.matchStatus === 'user_confirmed' && link.exactModel && link.hasText)) return null;
+    const documents = await Document.findAll({
+      where: { user_id: id(user), is_active: true, status: 'ready', text_content: { [Op.like]: `%${model}%` } },
+      attributes: ['id', 'name', 'status', 'text_content', 'ai_analysis'],
+      order: [['id', 'DESC']],
+    });
+    for (const doc of documents) {
+      if (evidence.some(link => link.documentId === doc.id && link.matchStatus === 'different_model')) continue;
+      if (!matchesVaultManual(doc, item) || !(await sharesHome(doc.id, home))) continue;
+      return { documentId: doc.id, name: doc.name, sourceUrl: doc.ai_analysis?.sourceUrl || null, edition: doc.ai_analysis?.edition || null };
+    }
+    return null;
+  }
+
+  const response = row => {
+    const { manufacturerManualLink, ...record } = row.record;
+    return { id: row.id, propertyId: row.property_id, record, manufacturerManualLink: registeredLink(row.record),
+      version: row.version, archived: row.archived, updatedAt: row.updatedAt };
+  };
+  return {
+    permission, document, find,
+    async manufacturerManual(user, home, itemId, confirmation) {
+      const writing = confirmation !== undefined;
+      if (writing) validate(Joi.object({
+        confirmed: Joi.valid(true).required(), itemVersion: Joi.number().integer().positive().required(),
+        manualUrl: Joi.string().uri().max(2048).required()
+      }).required(), confirmation);
+      const item = await find(user, home, itemId, writing);
+      const stored = registeredLink(item.record);
+      if (stored && (!writing || stored.manualUrl === confirmation.manualUrl)) return { registered: true, link: stored };
+      if (writing && item.version !== confirmation.itemVersion) throw new ItemError('Reload the changed appliance before registering its manual.', 409);
+      const link = await resolveManufacturerManual(item.record.identity);
+      const current = await find(user, home, itemId, writing);
+      if (current.version !== item.version) throw new ItemError('The appliance changed. Check its manual again.', 409);
+      if (!writing) return { registered: false, link };
+      if (!link || link.manualUrl !== confirmation.manualUrl) throw new ItemError('The manufacturer link changed. Check it again.', 409);
+      const [count] = await Item.update({ record: { ...current.record, manufacturerManualLink: link }, version: current.version + 1 },
+        { where: { id: current.id, property_id: id(home), version: current.version, archived: false } });
+      if (!count) throw new ItemError('The appliance changed. Reload its manual link.', 409);
+      return { registered: true, link };
+    },
+    async list(user, home) { await permission(user, home); return (await Item.findAll({ where: { property_id: id(home), archived: false }, order: [['id','DESC']] })).map(response); },
+    async get(user, home, itemId) {
+      const item = await find(user, home, itemId);
+      const links = await Evidence.findAll({ where: { item_id: item.id } });
+      const evidence = [];
+      for (const link of links) {
+        // Property access never grants access to another person's private documents.
+        const doc = await Document.findOne({ where: { id: link.user_document_id, user_id: id(user), is_active: true } });
+        if (doc) {
+          const isManual = link.role === 'manual';
+          const exactModel = isManual && matchesVaultManual(doc, item);
+          evidence.push({ id: link.id, documentId: doc.id, name: doc.name, status: doc.status, role: link.role, matchStatus: link.match_status, hasText: require('./itemSource').readable(doc), exactModel,
+            sourceUrl: isManual ? doc.ai_analysis?.sourceUrl || null : null,
+            edition: isManual ? doc.ai_analysis?.edition || null : null,
+            verifiedDate: exactModel ? doc.ai_analysis?.retrievedAt || null : null });
+        }
+      }
+      return { ...response(item), evidence, vaultManual: await vaultMatch(user, home, item, evidence) };
+    },
+    async create(user, home, payload) {
+      await permission(user, home, true);
+      validate(Joi.object({ requestKey: Joi.string().guid().required(), record: record.required() }).required(), payload);
+      const [row] = await Item.findOrCreate({ where: { property_id: id(home), request_key: payload.requestKey }, defaults: { created_by_user_id: id(user), record: payload.record, version: 1, archived: false } });
+      return response(row);
+    },
+    async update(user, home, itemId, payload) {
+      const current = await find(user, home, itemId, true);
+      validate(Joi.object({ version: Joi.number().integer().min(1).required(), record, archived: Joi.boolean() }).or('record','archived').required(), payload);
+      const changes = { version: payload.version + 1 };
+      if (payload.record) {
+        const link = registeredLink({ ...payload.record, manufacturerManualLink: registeredLink(current.record) });
+        changes.record = link ? { ...payload.record, manufacturerManualLink: link } : payload.record;
+      }
+      if (payload.archived !== undefined) changes.archived = payload.archived;
+      const [count] = await Item.update(changes, { where: { id: id(itemId), property_id: id(home), version: payload.version, archived: false } });
+      if (!count) throw new ItemError('This record changed. Reload before saving.', 409);
+      return payload.archived ? { id: id(itemId), archived: true } : this.get(user, home, itemId);
+    },
+    async keepVaultManual(user, home, itemId, payload) {
+      validate(Joi.object({ documentId: Joi.number().integer().positive().required(), itemVersion: Joi.number().integer().positive().required() }).required(), payload);
+      return this.attach(user, home, itemId, { documentId: payload.documentId, role: 'manual', matchStatus: 'user_confirmed' }, payload.itemVersion);
+    },
+    async attach(user, home, itemId, payload, vaultVersion = null) {
+      const item = await find(user, home, itemId, true);
+      validate(Joi.object({ documentId: Joi.number().integer().positive().required(), role: Joi.string().valid('manual','receipt','warranty','installation','service','other').required(), matchStatus: Joi.string().valid('unreviewed','user_confirmed','different_model').required() }), payload);
+      return db.transaction(async transaction => {
+      // Serialize associations through the original document, including cross-home checks.
+      const sourceDocument = await document(user, payload.documentId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (vaultVersion !== null) {
+        const current = await Item.findOne({ where: { id: item.id, property_id: id(home), archived: false }, transaction, lock: transaction.LOCK.UPDATE });
+        if (!current || current.version !== vaultVersion || !matchesVaultManual(sourceDocument, current)) {
+          throw new ItemError('The appliance details or Vault match changed. Reload and review it again.', 409);
+        }
+        const conflict = await Evidence.findOne({ where: { item_id: item.id, user_document_id: payload.documentId, match_status: 'different_model' }, transaction });
+        if (conflict) throw new ItemError('This copy was marked as a different model.', 409);
+      }
+      const otherHomeLinks = await PropertyDocument.findAll({ where: { user_document_id: payload.documentId, is_active: true }, transaction });
+      if (otherHomeLinks.some(l => l.property_id !== id(home))) throw new ItemError('This document is linked to a different home. Review that association first.', 409);
+      const itemLinks = await Evidence.findAll({ where: { user_document_id: payload.documentId }, transaction });
+      for (const link of itemLinks) {
+        const linked = await Item.findOne({ where: { id: link.item_id }, transaction });
+        if (linked && linked.property_id !== id(home)) throw new ItemError('This document is linked to a different home.', 409);
+      }
+      const [link] = await Evidence.findOrCreate({ where: { item_id: item.id, user_document_id: payload.documentId, role: payload.role }, defaults: { match_status: payload.matchStatus }, transaction });
+      await link.update({ match_status: payload.matchStatus }, { transaction });
+      return { linked: true };
+      }).then(() => this.get(user, home, itemId));
+    },
+    async detach(user, home, itemId, evidenceId) {
+      await find(user, home, itemId, true);
+      const link = await Evidence.findOne({ where: { id: id(evidenceId), item_id: id(itemId) } });
+      if (!link) throw new ItemError('Evidence not found', 404);
+      await document(user, link.user_document_id);
+      await link.destroy();
+      return this.get(user, home, itemId);
+    },
+  };
+};

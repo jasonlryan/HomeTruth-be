@@ -40,7 +40,7 @@ const ChatHistory = sequelize.define('chat_history', {
     allowNull: false,
     defaultValue: DataTypes.NOW
   }
-});
+}, { tableName: "chat_histories" });
 
 
 module.exports = ChatHistory;

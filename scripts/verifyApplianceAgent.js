@@ -1,0 +1,192 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const createHomeAgents = require('../services/homeAgents');
+const {domainsFor,officialURL,containsModel,reviewCandidates}=require('../services/applianceManualPolicy');
+const {publicAddress}=require('../services/applianceManualDownload');
+function setup(){
+ const rows=[];let calls=0,imports=0,denied=false;
+ const item={record:{identity:{brand:'Bosch',model:'W100'}}};
+ const matches=(row,where)=>Object.entries(where).every(([k,v])=>row[k]===v);
+ const Run={async findOne({where,order}){return (order?[...rows].reverse():rows).find(row=>matches(row,where))||null;},async findOrCreate({where,defaults}){let row=rows.find(r=>matches(r,where));if(row)return[row,false];row={...where,...defaults,id:rows.length+1,updatedAt:new Date(),async update(values){Object.assign(this,values,{updatedAt:new Date()});return this;}};rows.push(row);return[row,true];},async update(values,{where}){const row=rows.find(r=>matches(r,where));if(!row)return[0];await row.update(values);return[1];}};
+ const items={async find(){if(denied)throw Object.assign(new Error('denied'),{statusCode:403});return item;}};
+ const raw={candidates:[{title:'Official manual',url:'https://www.bosch-home.co.uk/manual-W100.pdf',model:'W100',quote:'Instruction manual for W100',kind:'pdf'}],sourceUrls:['https://www.bosch-home.co.uk/manual-W100.pdf'],limitations:'Check the variant',usage:{modelCalls:2,totalTokens:100}};
+ const runtime={async findManual(){calls++;return raw;}};
+ const { agents, applianceAgent } = createHomeAgents({items,Run,runtime,
+   reserve: ({key,identity,execution}) => Run.findOrCreate({where:key, defaults:{status:'running',identity,execution}}),
+   async importManual(){imports++;return 8;}});
+ const service = {
+   ...applianceAgent,
+   start(principal, homeId, itemId, input) {
+     return agents.invoke({agent:'appliance-information', operation:'findManual', context:{principal, homeId, itemId}, input});
+   }
+ };
+ return{service,agents,item,rows,raw,runtime,get calls(){return calls;},get imports(){return imports;},deny(){denied=true;}};
+}
+const key='e99d6b94-a656-4591-b78f-cdeab470c315';
+test('manufacturer URLs and exact model boundaries fail closed',()=>{
+ const domains=domainsFor('Bosch');
+ assert.ok(officialURL('https://media3.bsh-group.com/a.pdf',domains));
+ for(const url of ['http://bosch-home.co.uk/a','https://bosch-home.co.uk.evil.test/a','https://evil.test/bosch-home.co.uk','https://user@bosch-home.co.uk/a','https://bosch-home.co.uk:8000/a'])assert.equal(officialURL(url,domains),null);
+ assert.ok(containsModel('Model W100/01 instructions','W100/01'));assert.ok(containsModel('Model: W100','W100'));assert.equal(containsModel('W100A','W100'),false);assert.equal(containsModel('AW100','W100'),false);
+ for(const address of ['127.0.0.1','10.1.0.1','169.254.169.254','172.16.0.1','192.168.1.1','100.64.0.1','::1','224.0.0.1'])assert.equal(publicAddress(address),false);
+ assert.equal(publicAddress('8.8.8.8'),true);
+});
+test('unreturned URLs and different variants are rejected even if model proposes them',()=>{
+ const f=setup();assert.equal(reviewCandidates(f.raw,'Bosch','W100').length,1);
+ f.raw.sourceUrls=[];assert.equal(reviewCandidates(f.raw,'Bosch','W100').length,0);
+ f.raw.sourceUrls=[f.raw.candidates[0].url];f.raw.candidates[0].quote='W100A instructions';assert.equal(reviewCandidates(f.raw,'Bosch','W100').length,0);
+});
+test('run persists for reload and retry key prevents another paid run',async()=>{
+ const f=setup();const run=await f.service.start(1,2,3,{requestKey:key});assert.equal(run.status,'needs_review');assert.equal(run.candidates.length,1);
+ await f.service.start(1,2,3,{requestKey:key});assert.equal(f.calls,1);assert.equal((await f.service.latest(1,2,3)).id,run.id);
+ assert.equal(await f.service.latest(9,2,3),null);
+});
+test('permission denial occurs before any paid tool or data creation',async()=>{
+ const f=setup();f.deny();await assert.rejects(()=>f.service.start(1,2,3,{requestKey:key}),e=>e.statusCode===403);assert.equal(f.calls,0);assert.equal(f.rows.length,0);
+});
+test('model changes invalidate previous findings before import',async()=>{
+ const f=setup();const run=await f.service.start(1,2,3,{requestKey:key});f.item.record.identity.model='W100A';
+ await assert.rejects(()=>f.service.saveManual(1,2,3,run.id,{candidateIndex:0,confirmed:true}),e=>e.statusCode===409);assert.equal(f.imports,0);assert.equal(await f.service.latest(1,2,3),null);
+});
+test('saving requires explicit confirmation, private ownership and PDF candidate; duplicate save is idempotent',async()=>{
+ const f=setup();const run=await f.service.start(1,2,3,{requestKey:key});
+ await assert.rejects(()=>f.service.saveManual(1,2,3,run.id,{candidateIndex:0,confirmed:false}));
+ await assert.rejects(()=>f.service.saveManual(9,2,3,run.id,{candidateIndex:0,confirmed:true}),e=>e.statusCode===404);
+ assert.equal(f.imports,0);assert.equal((await f.service.saveManual(1,2,3,run.id,{candidateIndex:0,confirmed:true})).status,'saved');
+ await f.service.saveManual(1,2,3,run.id,{candidateIndex:0,confirmed:true});assert.equal(f.imports,1);
+});
+test('search failure is persisted honestly and stale running task recovers',async()=>{
+ const f=setup();f.runtime.findManual=async()=>{throw new Error('provider down');};const run=await f.service.start(1,2,3,{requestKey:key});assert.equal(run.status,'failed');assert.equal(run.candidates.length,0);
+ f.rows[0].status='running';f.rows[0].updatedAt=new Date(0);assert.equal((await f.service.latest(1,2,3)).status,'failed');
+});
+test('PDF parser accepts exact-model bytes and rejects a different model',async()=>{
+ const buffer=Buffer.from(require('./fixtures/ht341/synthetic-manual.json').base64,'base64');
+ const {extractAndCheck}=require('../services/applianceManualDownload');
+ assert.ok((await extractAndCheck(buffer,'WAN282X2GB')).includes('WAN282X2GB'));
+ await assert.rejects(()=>extractAndCheck(buffer,'WAN282X2GB99'));
+});
+
+test('questions can select relevant passages beyond the first 24000 characters of a manual',()=>{
+ const excerpt=require('../services/itemSourceExcerpt');
+ const text='Safety first. '+('General information. '.repeat(2500))+'Cleaning the detergent drawer: remove the drawer and rinse it. '+('Other information. '.repeat(2000));
+ const selected=excerpt(text,'How do I clean the detergent drawer?');
+ assert.ok(selected.includes('Cleaning the detergent drawer: remove the drawer and rinse it.'));assert.ok(selected.length<=24000);assert.ok(selected.includes('Safety first.'));
+});
+
+test('PDF quotation whitespace is restored from the original source; altered words and numbers are rejected',()=>{
+ const quote=require('../services/itemSourceQuote');
+ const source='1.\nPull out the detergent drawer.\n2.Press down on the insert.';
+ assert.equal(quote(source,'1.Pull out the detergent drawer. 2.Press down on the insert.'),source);
+ assert.equal(quote(source,'1.Push out the detergent drawer.'),null);assert.equal(quote('Set 40 degrees.','Set 60 degrees.'),null);
+});
+
+test('a repeat search reuses an already attached manual instead of downloading a duplicate',async()=>{
+ const attach=[];
+ const items={async find(){return {record:{identity:{brand:'Bosch',model:'W100'}}};},async get(){return {evidence:[{documentId:8}]};},async document(){return {id:8,status:'ready',text_content:'User manual for W100. Clean the filter after use.',ai_analysis:{discoveredUrl:'https://bosch-home.co.uk/manual.pdf'}};},async attach(...args){attach.push(args);}};
+ const importer=require('../services/importApplianceManual')({items,Document:{async findOne(){throw new Error('Must not create another copy');}},vectorService:{}});
+ assert.equal(await importer({user:1,home:2,itemId:3,identity:{brand:'Bosch',model:'W100'},candidate:{url:'https://bosch-home.co.uk/manual.pdf'},runId:5}),8);
+ assert.equal(attach.length,1);
+});
+
+test('an expired download deadline fails before DNS or network access',async()=>{
+ await assert.rejects(()=>require('../services/applianceManualDownload').download('https://bosch-home.co.uk/manual.pdf',domainsFor('Bosch'),0,0));
+});
+test('a rejected answer explains missing verified quotations instead of an empty result',async()=>{
+ const intelligence=require('../services/itemIntelligence')({complete:async()=>({statements:[{answer:'Invented',sourceId:1,quote:'Not in this document'}],limitations:{}})});
+ const answer=await intelligence.answer('What next?',[{id:1,text:'Read the instructions.'}]);assert.equal(answer.statements.length,0);assert.match(answer.limitations,/No exact supporting quotation/);
+});
+
+test('source answers restore original passages from IDs and discard invented IDs',()=>{
+ const {passagesFor,restoreStatements}=require('../agent-runtime/sourcePassages');
+ const text='1.\nPull out the drawer. '+('Use a soft brush. '.repeat(60)),passages=passagesFor(text);
+ assert.equal(passages.map(p=>p.text).join(''),text);
+ for(const p of passagesFor('First source span.\n\n[Another selected passage]\n\nLater source span.'))assert.ok(!p.text.includes('[Another selected passage]'));
+ const answer=restoreStatements({statements:[{answer:'Use a brush.',sourceId:1,passageId:1},{answer:'Invented',sourceId:1,passageId:999}],limitations:''},[{id:1,passages}]);
+ assert.equal(answer.statements.length,1);assert.equal(answer.statements[0].quote,passages[1].text);assert.ok(text.includes(answer.statements[0].quote));
+});
+
+test('dispatch rejects unknown operations and client-supplied authority before lookup', async () => {
+  const f = setup();
+  const call = { agent: 'appliance-information', operation: 'findManual', context: { principal: 1, homeId: '2', itemId: '3' }, input: { requestKey: key } };
+  await assert.rejects(f.agents.invoke({ ...call, operation: 'saveManual' }), /Unknown agent operation/);
+  await assert.rejects(f.agents.invoke({ ...call, input: { requestKey: key, homeId: 9 } }), { statusCode: 400 });
+  await assert.rejects(f.agents.invoke({ ...call, input: undefined }), { statusCode: 400 });
+  assert.equal(f.rows.length, 0);
+  assert.equal(f.calls, 0);
+  assert.equal((await f.agents.invoke(call)).status, 'needs_review');
+});
+
+test('late lookup cannot overwrite interrupted recovery or issue another lookup on replay', async () => {
+  const f = setup();
+  let searches = 0;
+  let release, entered;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  f.runtime.findManual = async () => { searches++; entered(); await blocked; return f.raw; };
+  const pending = f.service.start(1, 2, 3, { requestKey: key });
+  await started;
+  assert.equal((await f.service.start(1, 2, 3, { requestKey: key })).status, 'running');
+  f.rows[0].updatedAt = new Date(0);
+  assert.equal((await f.service.latest(1, 2, 3)).status, 'failed');
+  release();
+  const result = await pending;
+  assert.equal(result.status, 'failed');
+  assert.equal(result.candidates, undefined);
+  assert.match(result.notice, /interrupted/);
+  assert.equal(searches, 1);
+});
+
+test('access revoked during paid work suppresses candidates', async () => {
+  const f = setup();
+  f.runtime.findManual = async () => { f.deny(); return f.raw; };
+  await assert.rejects(f.service.start(1, 2, 3, { requestKey: key }), { statusCode: 403 });
+  assert.deepEqual(f.rows[0].result.candidates, []);
+});
+
+test('dispatcher validates registrations and rejects incompatible result contracts', async () => {
+  const createDispatcher = require('../services/agentDispatcher');
+  const operation = require('../services/applianceAgentOperation')(async () => ({ status: 'ok' }));
+  assert.throws(() => createDispatcher([operation, operation]), /Duplicate/);
+  assert.throws(() => createDispatcher([{ ...operation, output: undefined }]), /Invalid agent operation/);
+  await assert.rejects(createDispatcher([operation]).invoke({
+    agent: operation.agent, operation: operation.operation,
+    context: { principal: 1, homeId: 2, itemId: 3 }, input: {requestKey: key}
+  }), /Invalid result/);
+});
+
+test('policy requires approved positive budgets before enabling and enforces the SDK ceilings', () => {
+  const {readPolicy} = require('../services/agentExecutionPolicy');
+  assert.equal(readPolicy({}).enabled, false);
+  const pilot = readPolicy({APPLIANCE_AGENT_ENABLED:'true'});
+  assert.deepEqual([pilot.currency,pilot.maxConcurrent,pilot.dailyMicros,pilot.lookupMicros],['GBP',1,1000000,200000]);
+  assert.throws(()=>readPolicy({APPLIANCE_AGENT_ENABLED:'true',APPLIANCE_AGENT_DAILY_USD_MICROS:'1000000'}),/legacy USD/);
+  assert.throws(()=>readPolicy({APPLIANCE_AGENT_ENABLED:'yes'}),/ENABLED/);
+  assert.throws(()=>readPolicy({APPLIANCE_AGENT_MAX_TURNS:'5'}),/MAX_TURNS/);
+  assert.throws(()=>readPolicy({APPLIANCE_AGENT_DEADLINE_MS:'0'}),/DEADLINE/);
+  const entry = require('../services/applianceAgentOperation')(async()=>({}));
+  const dispatcher = require('../services/agentDispatcher');
+  assert.throws(()=>dispatcher([{...entry,limits:{...entry.limits,tools:['write_record']}}]),/capabilities/);
+  assert.throws(()=>dispatcher([entry],{'appliance-information/findManual':9}),/Unknown active revision/);
+});
+
+test('provider estimates price cached tokens and web searches independently of market reservations', () => {
+  const cost = require('../agent-runtime/providerCost');
+  const response = {usage:{inputTokens:1000,inputTokensDetails:[{cached_tokens:400}],outputTokens:100,totalTokens:1100},
+    output:[{type:'hosted_tool_call',name:'web_search_call'},{type:'function_call'}]};
+  const priced = cost('gpt-5-mini',[response,response]);
+  assert.equal(priced.currency,'USD');
+  assert.equal(priced.estimatedMicros,20720);
+  assert.equal(priced.searchCalls,2);
+  assert.equal(cost('unpriced-model',[response]).estimatedMicros,null);
+  assert.equal(cost('gpt-5-mini',[]).estimatedMicros,null);
+});
+
+test('an exact model in a sales sheet or model suffix variant cannot qualify a manual', () => {
+  const {isOperatingManual} = require('../services/applianceManualPolicy');
+  assert.equal(isOperatingManual('Bosch WAN28201GB. Optional accessories. EcoSilence Drive', 'WAN28201GB'), false);
+  assert.equal(isOperatingManual('Product specification sheet. User manual available separately. WAN28201GB', 'WAN28201GB'), false);
+  assert.equal(isOperatingManual('User manual and installation instructions. WAN28201GB/01', 'WAN28201GB'), false);
+  assert.equal(isOperatingManual('WAN28201GB User manual and installation instructions', 'WAN28201GB'), true);
+  const f = setup();
+  f.raw.candidates[0].title = 'Bosch product data sheet';
+  assert.equal(reviewCandidates(f.raw, 'Bosch', 'W100').length, 0);
+});
