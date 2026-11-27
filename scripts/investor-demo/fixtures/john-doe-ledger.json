@@ -1,0 +1,106 @@
+[
+  {
+    "date": "2023-10-12",
+    "category": "Electrical Test",
+    "description": "EICR and socket remediation",
+    "vendor": "Brighton Safety Co.",
+    "amount": 185.4,
+    "status": "Cleared"
+  },
+  {
+    "date": "2023-12-05",
+    "category": "Boiler Check",
+    "description": "Annual service & pressure test",
+    "vendor": "Seaside Heating",
+    "amount": 142,
+    "status": "Cleared"
+  },
+  {
+    "date": "2024-02-18",
+    "category": "Repairs",
+    "description": "Roof slate replacement after storm",
+    "vendor": "South Downs Roofing",
+    "amount": 420.75,
+    "status": "Cleared"
+  },
+  {
+    "date": "2024-04-09",
+    "category": "Home Improvements",
+    "description": "Kitchen repaint & minor joinery",
+    "vendor": "Lanes Decorators",
+    "amount": 310.2,
+    "status": "Cleared"
+  },
+  {
+    "date": "2024-05-22",
+    "category": "Electrical Test",
+    "description": "Fuse board labelling & RCD check",
+    "vendor": "Hove Electrics",
+    "amount": 128,
+    "status": "Cleared"
+  },
+  {
+    "date": "2024-06-30",
+    "category": "Repairs",
+    "description": "Garden gate replacement",
+    "vendor": "Kemp Joinery",
+    "amount": 95.5,
+    "status": "Cleared"
+  },
+  {
+    "date": "2024-08-11",
+    "category": "Home Improvements",
+    "description": "Loft insulation top-up",
+    "vendor": "Downland Energy",
+    "amount": 260,
+    "status": "Cleared"
+  },
+  {
+    "date": "2024-09-07",
+    "category": "Boiler Check",
+    "description": "Condensate pipe flush",
+    "vendor": "Seaside Heating",
+    "amount": 88,
+    "status": "Cleared"
+  },
+  {
+    "date": "2024-10-19",
+    "category": "Repairs",
+    "description": "Window seal replacement",
+    "vendor": "Coastline Glazing",
+    "amount": 156.25,
+    "status": "Cleared"
+  },
+  {
+    "date": "2024-11-28",
+    "category": "Electrical Test",
+    "description": "Smoke alarm replacements",
+    "vendor": "Brighton Safety Co.",
+    "amount": 74,
+    "status": "Cleared"
+  },
+  {
+    "date": "2025-01-14",
+    "category": "Home Improvements",
+    "description": "Bathroom ventilation upgrade",
+    "vendor": "Marina Mechanical",
+    "amount": 235.8,
+    "status": "Cleared"
+  },
+  {
+    "date": "2025-02-20",
+    "category": "Boiler Check",
+    "description": "Flue integrity check",
+    "vendor": "Seaside Heating",
+    "amount": 112.3,
+    "status": "Pending"
+  },
+  {
+    "date": "2025-03-03",
+    "category": "Repairs",
+    "description": "Front door resealing",
+    "vendor": "Hove Handymen",
+    "amount": 82,
+    "status": "Pending"
+  }
+]

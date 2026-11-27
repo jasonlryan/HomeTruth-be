@@ -9,3 +9,6 @@ qdrant_storage/
 qdrant-local/
 .qdrant-initialized
 .DS_Store
+
+# Dedicated local investor demo credentials and storage
+.investor-demo/
