@@ -64,6 +64,8 @@ const route = fn => async (req, res) => {
   }
 };
 router.get('/items', route(r => service.list(r.user.id, r.params.propertyId)));
+router.get('/items/:itemId/manufacturer-manual', costly, route(r => service.manufacturerManual(r.user.id, r.params.propertyId, r.params.itemId)));
+router.post('/items/:itemId/manufacturer-manual', costly, route(r => service.manufacturerManual(r.user.id, r.params.propertyId, r.params.itemId, r.body || {})));
 router.post('/items', route(r => service.create(r.user.id, r.params.propertyId, r.body)));
 router.post('/items/identify', costly,
 // Check home permission BEFORE accepting image bytes or invoking a paid service.
