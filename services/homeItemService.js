@@ -24,7 +24,6 @@ module.exports = function createHomeItemService({ Item, Evidence, Person, Docume
   const matchesVaultManual = (doc, item) => {
     const { brand, model } = item.record.identity;
     if (!brand || !model || doc.status !== 'ready' || !readable(doc)) return false;
-    if (!/\b(?:manual|instructions?|user guide|use and care)\b/i.test(`${doc.doc_type || ''} ${doc.name}`)) return false;
     return isOperatingManual(doc.text_content, model) &&
       Boolean(containsModel(doc.text_content, brand) || officialURL(doc.ai_analysis?.sourceUrl, domainsFor(brand)));
   };
@@ -46,7 +45,7 @@ module.exports = function createHomeItemService({ Item, Evidence, Person, Docume
     if (!model || evidence.some(link => link.role === 'manual' && link.matchStatus === 'user_confirmed' && link.exactModel && link.hasText)) return null;
     const documents = await Document.findAll({
       where: { user_id: id(user), is_active: true, status: 'ready', text_content: { [Op.like]: `%${model}%` } },
-      attributes: ['id', 'name', 'doc_type', 'status', 'text_content', 'ai_analysis'],
+      attributes: ['id', 'name', 'status', 'text_content', 'ai_analysis'],
       order: [['id', 'DESC']],
     });
     for (const doc of documents) {
