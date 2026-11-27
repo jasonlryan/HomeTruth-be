@@ -153,7 +153,7 @@ for (const forbidden of [
 ]) {
   assert.equal(serialized.includes(forbidden), false, `response exposed ${forbidden}`);
 }
-assert.deepEqual(response.capabilities, ["programme:view"]);
+assert.deepEqual(response.capabilities, ["programme:view", "report:view", "report:export"]);
 assert.equal(Object.hasOwn(response, "reportingCapabilities"), false);
 
 assert.deepEqual(

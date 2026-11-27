@@ -31,7 +31,7 @@ const ROLE_CAPABILITIES = Object.freeze({
   ]),
 });
 
-const IMPLEMENTED_CAPABILITIES = new Set(["programme:view", "audit:view"]);
+const IMPLEMENTED_CAPABILITIES = new Set(["programme:view", "audit:view", "report:view", "report:export", "report:definitions:view"]);
 const INDIVIDUAL_RESOURCE_TYPES = new Set([
   "homeowners",
   "members",
