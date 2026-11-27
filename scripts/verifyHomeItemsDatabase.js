@@ -59,7 +59,7 @@ async function main() {
     assert.equal(raced.filter(r=>r.status==='fulfilled').length,1);assert.equal(raced.find(r=>r.status==='rejected').reason.statusCode,409);
     const AgentRun=require('../models/applianceAgentRun');
     const agentItem=await s.create(1,42,{requestKey:require('crypto').randomUUID(),record:{...record,identity:{brand:'Bosch',model:'W100',method:'manual'}}});
-    const manualDoc = await Document.create({user_id:1,is_active:true,name:'Bosch W100 manual',status:'ready',text_content:'Bosch W100 User manual. Clean the drum after use.'});
+    const manualDoc = await Document.create({user_id:1,is_active:true,name:'bosch-W100.pdf',status:'ready',text_content:'Bosch W100 User manual. Clean the drum after use.'});
     const sheet = await Document.create({user_id:1,is_active:true,name:'Bosch W100 manual',status:'ready',text_content:'Bosch W100 product specification sheet. Optional accessories.'});
     assert.equal((await s.get(1,42,agentItem.id)).vaultManual.documentId,manualDoc.id);
     assert.equal((await s.get(2,42,agentItem.id)).vaultManual,null);
