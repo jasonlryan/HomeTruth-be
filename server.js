@@ -89,6 +89,7 @@ app.use('/api/pilot', pilotFeedbackRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/admin/users', adminDataRoutes);
+app.use('/api/admin/investor-demo', require('./routes/admin/investorDemoRoutes'));
 app.use('/api/admin/articles', adminArticleRoutes);
 app.use('/api/admin/pilot', adminPilotRoutes);
 app.use('/api/admin/partner-programmes', adminPartnerProgrammeRoutes);
