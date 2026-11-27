@@ -1,10 +1,11 @@
 const Joi = require('joi');
+const { registeredLink, resolveManual } = require('./manufacturerManualLink');
 const { Op } = require('sequelize');
 const { containsModel, domainsFor, officialURL, isOperatingManual } = require('./applianceManualPolicy');
 const { readable } = require('./itemSource');
 const { ItemError, record, validate, id, readLevels, writeLevels } = require('./itemContract');
 // Injectable dependencies keep permission/persistence tests independent of application startup.
-module.exports = function createHomeItemService({ Item, Evidence, Person, Document, PropertyDocument, db }) {
+module.exports = function createHomeItemService({ Item, Evidence, Person, Document, PropertyDocument, db, resolveManufacturerManual = resolveManual }) {
   const permission = async (user, home, write = false) => {
     const relation = await Person.findOne({ where: { user_id: id(user), property_id: id(home), relationship_status: 'active' } });
     if (!relation) throw new ItemError('Home record not found', 404);
@@ -56,9 +57,33 @@ module.exports = function createHomeItemService({ Item, Evidence, Person, Docume
     return null;
   }
 
-  const response = row => ({ id: row.id, propertyId: row.property_id, record: row.record, version: row.version, archived: row.archived, updatedAt: row.updatedAt });
+  const response = row => {
+    const { manufacturerManualLink, ...record } = row.record;
+    return { id: row.id, propertyId: row.property_id, record, manufacturerManualLink: registeredLink(row.record),
+      version: row.version, archived: row.archived, updatedAt: row.updatedAt };
+  };
   return {
     permission, document, find,
+    async manufacturerManual(user, home, itemId, confirmation) {
+      const writing = confirmation !== undefined;
+      if (writing) validate(Joi.object({
+        confirmed: Joi.valid(true).required(), itemVersion: Joi.number().integer().positive().required(),
+        manualUrl: Joi.string().uri().max(2048).required()
+      }).required(), confirmation);
+      const item = await find(user, home, itemId, writing);
+      const stored = registeredLink(item.record);
+      if (stored && (!writing || stored.manualUrl === confirmation.manualUrl)) return { registered: true, link: stored };
+      if (writing && item.version !== confirmation.itemVersion) throw new ItemError('Reload the changed appliance before registering its manual.', 409);
+      const link = await resolveManufacturerManual(item.record.identity);
+      const current = await find(user, home, itemId, writing);
+      if (current.version !== item.version) throw new ItemError('The appliance changed. Check its manual again.', 409);
+      if (!writing) return { registered: false, link };
+      if (!link || link.manualUrl !== confirmation.manualUrl) throw new ItemError('The manufacturer link changed. Check it again.', 409);
+      const [count] = await Item.update({ record: { ...current.record, manufacturerManualLink: link }, version: current.version + 1 },
+        { where: { id: current.id, property_id: id(home), version: current.version, archived: false } });
+      if (!count) throw new ItemError('The appliance changed. Reload its manual link.', 409);
+      return { registered: true, link };
+    },
     async list(user, home) { await permission(user, home); return (await Item.findAll({ where: { property_id: id(home), archived: false }, order: [['id','DESC']] })).map(response); },
     async get(user, home, itemId) {
       const item = await find(user, home, itemId);
@@ -85,10 +110,13 @@ module.exports = function createHomeItemService({ Item, Evidence, Person, Docume
       return response(row);
     },
     async update(user, home, itemId, payload) {
-      await find(user, home, itemId, true);
+      const current = await find(user, home, itemId, true);
       validate(Joi.object({ version: Joi.number().integer().min(1).required(), record, archived: Joi.boolean() }).or('record','archived').required(), payload);
       const changes = { version: payload.version + 1 };
-      if (payload.record) changes.record = payload.record;
+      if (payload.record) {
+        const link = registeredLink({ ...payload.record, manufacturerManualLink: registeredLink(current.record) });
+        changes.record = link ? { ...payload.record, manufacturerManualLink: link } : payload.record;
+      }
       if (payload.archived !== undefined) changes.archived = payload.archived;
       const [count] = await Item.update(changes, { where: { id: id(itemId), property_id: id(home), version: payload.version, archived: false } });
       if (!count) throw new ItemError('This record changed. Reload before saving.', 409);
